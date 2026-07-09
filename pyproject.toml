@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gpu-top"
+version = "0.1.0"
+description = "htop-style GPU monitor with docker container attribution"
+requires-python = ">=3.10"
+
+[project.scripts]
+gpu-top = "gpu_top:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gpu_top"]
