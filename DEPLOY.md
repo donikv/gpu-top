@@ -68,6 +68,14 @@ If that returns exactly one `dn:`, copy the same values into `[auth.ldap]`.
 For Active Directory use `user_filter = "(sAMAccountName={username})"` and a
 base DN like `CN=Users,DC=corp,DC=example,DC=org`.
 
+For directories that use **STARTTLS on the plain ldap:// port** (OpenLDAP
+`ssl start_tls`, NixOS `users.ldap.useTLS`), set `starttls = true`; add
+`tls_verify = false` if the clients use `TLS_REQCERT allow` (self-signed
+cert). To restrict dashboard access to one group, AND it into the filter the
+same way pam_filter does, e.g.
+`user_filter = "(&(uid={username})(memberOf=cn=monitoring,ou=Machines,dc=example,dc=org))"`.
+A complete real-world example is [examples/server-ipg.toml](examples/server-ipg.toml).
+
 To try LDAP locally first, `docker compose -f dev/ldap-compose.yml up -d`
 starts a seeded OpenLDAP (user `alice`/`alice123`) on port 3389.
 

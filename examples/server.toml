@@ -37,6 +37,13 @@ mode = "ldap"
 # Use ldaps:// (or ldap:// only on a trusted network).
 uri = "ldaps://ldap.example.org"
 
+# For directories that expect STARTTLS on the plain ldap:// port (OpenLDAP's
+# `ssl start_tls`, NixOS users.ldap.useTLS), set starttls = true.
+# tls_verify = false skips certificate validation (TLS_REQCERT allow) — only
+# for self-signed setups you already trust.
+#starttls = true
+#tls_verify = false
+
 # Service account used to search for the user's DN (search + bind flow).
 service_dn = "cn=gpu-top,ou=services,dc=example,dc=org"
 # Can also be supplied via GPU_TOP_SERVICE_PASSWORD (env wins over this file).

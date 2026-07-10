@@ -45,15 +45,25 @@ def require_user(request: Request) -> str:
 
 def _ldap_authenticate(cfg, username, password):
     """Blocking search+bind against the directory. Returns True on success."""
+    import ssl
+
     import ldap3
     from ldap3.core.exceptions import LDAPException
     from ldap3.utils.conv import escape_filter_chars
 
-    server = ldap3.Server(cfg.uri, connect_timeout=5)
+    # tls_verify=False mirrors OpenLDAP's `TLS_REQCERT allow` (self-signed or
+    # unvalidated certs); applies to both ldaps:// and STARTTLS connections.
+    tls = ldap3.Tls(
+        validate=ssl.CERT_REQUIRED if cfg.tls_verify else ssl.CERT_NONE)
+    server = ldap3.Server(cfg.uri, connect_timeout=5, tls=tls)
+    # STARTTLS upgrades a plain ldap:// connection to TLS before any bind is
+    # sent (the equivalent of pam_ldap's `ssl start_tls` / nixos useTLS).
+    auto_bind = (ldap3.AUTO_BIND_TLS_BEFORE_BIND if cfg.starttls
+                 else ldap3.AUTO_BIND_NO_TLS)
     try:
         with ldap3.Connection(
             server, user=cfg.service_dn, password=cfg.service_password,
-            auto_bind=True, receive_timeout=5,
+            auto_bind=auto_bind, receive_timeout=5,
         ) as conn:
             conn.search(
                 cfg.base_dn,
@@ -66,7 +76,7 @@ def _ldap_authenticate(cfg, username, password):
             user_dn = conn.entries[0].entry_dn
         with ldap3.Connection(
             server, user=user_dn, password=password,
-            auto_bind=True, receive_timeout=5,
+            auto_bind=auto_bind, receive_timeout=5,
         ):
             return True
     except LDAPException as e:

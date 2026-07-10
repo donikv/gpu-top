@@ -64,6 +64,8 @@ class LdapConfig:
     service_password: str
     base_dn: str
     user_filter: str = "(uid={username})"
+    starttls: bool = False       # upgrade a ldap:// connection to TLS before binding
+    tls_verify: bool = True      # False = accept any certificate (TLS_REQCERT allow)
 
 
 @dataclass
@@ -118,6 +120,8 @@ def load_server_config(path):
             service_password=password,
             base_dn=_require(lc, "base_dn", "auth.ldap"),
             user_filter=lc.get("user_filter", "(uid={username})"),
+            starttls=bool(lc.get("starttls", False)),
+            tls_verify=bool(lc.get("tls_verify", True)),
         )
 
     return ServerConfig(

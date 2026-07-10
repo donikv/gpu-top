@@ -1,0 +1,46 @@
+# gpu-top server configuration for the ipg/zesoi environment.
+# Matches the NixOS users.ldap client setup (zver* machines):
+#   server ldap://zver0.zesoi.fer.hr, STARTTLS, TLS_REQCERT allow,
+#   binddn cn=administrator,dc=ipg,dc=com, base dc=ipg,dc=com.
+#
+# Copy to /etc/gpu-top/server.toml on the monitoring host and fill in the
+# two "FILL-ME" values.
+
+[server]
+host = "0.0.0.0"
+port = 8000
+db_path = "/var/lib/gpu-top/metrics.db"
+retention_days = 7
+
+# Generate: python3 -c 'import secrets; print(secrets.token_hex(32))'
+session_secret = "FILL-ME"
+session_hours = 12
+stale_after = 30.0
+
+[agents]
+# Generate: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+# and put the same value in each zver machine's agent.toml.
+tokens = ["FILL-ME"]
+
+[auth]
+mode = "ldap"
+
+[auth.ldap]
+# Same server the PAM clients use. useTLS in the NixOS config means STARTTLS
+# on the plain ldap:// port, and TLS_REQCERT allow means the certificate is
+# not validated — starttls/tls_verify below reproduce exactly that.
+uri = "ldap://zver0.zesoi.fer.hr"
+starttls = true
+tls_verify = false
+
+# Same service account the PAM clients bind with (binddn).
+# The password is deliberately NOT in this file: supply it on the server via
+# the GPU_TOP_SERVICE_PASSWORD env var, or GPU_TOP_SERVICE_PASSWORD_FILE
+# pointing at a root-owned secret file (see docker-compose.zver0.yml).
+service_dn = "cn=administrator,dc=ipg,dc=com"
+
+base_dn = "dc=ipg,dc=com"
+
+# Counterpart of the clients' pam_filter: only members of the "monitoring"
+# machine group may log in to the dashboard.
+user_filter = "(&(uid={username})(memberOf=cn=monitoring,ou=Machines,dc=ipg,dc=com))"
