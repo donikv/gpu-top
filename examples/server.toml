@@ -1,0 +1,49 @@
+# gpu-top central server configuration.
+#   gpu-top-server -c /etc/gpu-top/server.toml
+
+[server]
+host = "0.0.0.0"
+port = 8000
+
+# SQLite database holding metric history. Put it on a persistent volume in Docker.
+db_path = "/var/lib/gpu-top/metrics.db"
+
+# GPU samples older than this are pruned hourly.
+retention_days = 7
+
+# Secret for signing session cookies. Generate with:
+#   python -c 'import secrets; print(secrets.token_hex(32))'
+# Can also be supplied via GPU_TOP_SESSION_SECRET (env wins over this file).
+session_secret = "change-me"
+
+# Logged-in sessions expire after this many hours.
+session_hours = 12
+
+# A server is shown as "stale" in the UI when no agent push has arrived for
+# this many seconds. Use ~3-6x the agents' push interval.
+stale_after = 30.0
+
+[agents]
+# Bearer tokens agents may use to push metrics. One shared token or one per
+# host both work; multiple entries let you rotate tokens without downtime.
+tokens = ["change-me"]
+
+[auth]
+# "ldap" for production. "none" disables login entirely and is refused unless
+# the GPU_TOP_DEV=1 environment variable is set (local development only).
+mode = "ldap"
+
+[auth.ldap]
+# Use ldaps:// (or ldap:// only on a trusted network).
+uri = "ldaps://ldap.example.org"
+
+# Service account used to search for the user's DN (search + bind flow).
+service_dn = "cn=gpu-top,ou=services,dc=example,dc=org"
+# Can also be supplied via GPU_TOP_SERVICE_PASSWORD (env wins over this file).
+service_password = "change-me"
+
+# Where and how to find users. {username} is replaced with the login name.
+base_dn = "ou=people,dc=example,dc=org"
+user_filter = "(uid={username})"
+# Active Directory example:
+#   user_filter = "(sAMAccountName={username})"

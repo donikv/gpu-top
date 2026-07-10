@@ -1,0 +1,21 @@
+# Throwaway OpenLDAP for testing the server's LDAP auth locally:
+#   docker compose -f dev/ldap-compose.yml up -d
+# Then in dev/server-dev.toml (or a copy) set:
+#   [auth]        mode = "ldap"
+#   [auth.ldap]   uri = "ldap://localhost:3389"
+#                 service_dn = "cn=gpu-top,ou=services,dc=example,dc=org"
+#                 service_password = "service123"
+#                 base_dn = "ou=people,dc=example,dc=org"
+# Test user: alice / alice123
+services:
+  ldap:
+    image: bitnami/openldap:latest
+    ports:
+      - "3389:1389"
+    environment:
+      LDAP_ROOT: dc=example,dc=org
+      LDAP_ADMIN_USERNAME: admin
+      LDAP_ADMIN_PASSWORD: admin123
+      LDAP_CUSTOM_LDIF_DIR: /ldifs
+    volumes:
+      - ./seed.ldif:/ldifs/seed.ldif:ro

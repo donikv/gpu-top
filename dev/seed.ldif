@@ -1,0 +1,22 @@
+# Seed data for the throwaway dev LDAP server (see ldap-compose.yml).
+# Creates a service account for gpu-top and one test user alice/alice123.
+dn: ou=services,dc=example,dc=org
+objectClass: organizationalUnit
+ou: services
+
+dn: cn=gpu-top,ou=services,dc=example,dc=org
+objectClass: simpleSecurityObject
+objectClass: organizationalRole
+cn: gpu-top
+userPassword: service123
+
+dn: ou=people,dc=example,dc=org
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: alice
+cn: Alice Example
+sn: Example
+userPassword: alice123

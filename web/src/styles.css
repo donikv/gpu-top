@@ -1,0 +1,281 @@
+/* Plain CSS, one file — no CSS-in-JS or frameworks, to keep the React lessons
+   about React. Grafana-ish dark theme.
+
+   CSS custom properties (variables) on :root are readable from anywhere,
+   including inline `style={{ color: 'var(--accent-util)' }}` in JSX. */
+:root {
+  --bg: #111210;
+  --surface: #1a1a19;
+  --surface-2: #232322;
+  --border: #33332f;
+  --text: #e8e6df;
+  --text-dim: #8a897f;
+  --accent-util: #3987e5;   /* utilization series (validated on dark surface) */
+  --accent-mem: #199e70;    /* memory series */
+  --status-ok: #3987e5;
+  --status-warning: #c98500;
+  --status-critical: #e66767;
+  --live: #199e70;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------ login */
+
+.login-wrap {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.login-card h1 { margin: 0; font-size: 22px; }
+.login-hint { margin: 0 0 8px; color: var(--text-dim); }
+
+.login-card input {
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+}
+.login-card input:focus { outline: 1px solid var(--accent-util); }
+
+.login-card button {
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-util);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.login-card button:disabled { opacity: 0.5; cursor: default; }
+
+.login-error { color: var(--status-critical); font-size: 13px; }
+
+/* -------------------------------------------------------------- dashboard */
+
+.dashboard { padding: 0 20px 40px; max-width: 1600px; margin: 0 auto; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+.topbar h1 { margin: 0; font-size: 18px; }
+
+.topbar select {
+  padding: 6px 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-right .user { color: var(--text-dim); }
+.topbar-right button {
+  padding: 6px 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.banner {
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+}
+.banner.error { border-color: var(--status-critical); color: var(--status-critical); }
+
+/* --------------------------------------------------------- server section */
+
+.server-section {
+  margin-bottom: 28px;
+}
+/* Dim the whole section when its agent stopped reporting. */
+.server-section.stale .gpu-grid,
+.server-section.stale .proc-table { opacity: 0.45; }
+
+.server-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.server-header h2 { margin: 0; font-size: 16px; }
+
+.badge { font-size: 12px; }
+.badge.live { color: var(--live); }
+.badge.stale { color: var(--status-critical); }
+
+/* The Grafana-style responsive grid: as many 320px+ columns as fit. */
+.gpu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+/* ---------------------------------------------------------------- gpu card */
+
+.gpu-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gpu-card-title {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.gpu-index { font-weight: 600; }
+.gpu-name {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gauges { display: flex; flex-direction: column; gap: 6px; }
+
+.gauge-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.gauge-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.gauge-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+.gauge-fill.ok { background: var(--status-ok); }
+.gauge-fill.warning { background: var(--status-warning); }
+.gauge-fill.critical { background: var(--status-critical); }
+
+.gpu-stats {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.window-picker { display: flex; gap: 4px; }
+.window-picker button {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.window-picker button.active {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.chart-loading { color: var(--text-dim); font-size: 12px; padding: 20px 0; }
+
+/* --------------------------------------------------------------- sparkline */
+
+.sparkline { display: flex; flex-direction: column; gap: 2px; }
+.sparkline-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.sparkline-value { font-variant-numeric: tabular-nums; }
+.sparkline-svg {
+  width: 100%;
+  height: 60px;
+  display: block;
+}
+.gridline { stroke: var(--border); stroke-width: 0.3; }
+
+/* ----------------------------------------------------------- process table */
+
+.proc-table {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.proc-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 500;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.proc-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--surface-2);
+  font-variant-numeric: tabular-nums;
+}
+.proc-table .num { text-align: right; }
+.proc-table .proc-name {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

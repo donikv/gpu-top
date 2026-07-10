@@ -1,0 +1,18 @@
+# gpu-top agent configuration.
+# Copy to /etc/gpu-top/agent.toml on each GPU server and run:
+#   gpu-top-agent -c /etc/gpu-top/agent.toml
+
+[agent]
+# Display name for this machine in the web dashboard. Pick anything unique.
+server_name = "hydra1"
+
+# Base URL of the central gpu-top server.
+url = "https://gpu.example.org"
+
+# Must match one of the tokens in the server's [agents].tokens list.
+# Can also be supplied via the GPU_TOP_AGENT_TOKEN environment variable
+# (recommended in Docker) — the env var wins over this file.
+token = "change-me"
+
+# Seconds between samples. 5s keeps a week of history at a few MB per GPU.
+interval = 5.0

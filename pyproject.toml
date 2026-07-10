@@ -4,12 +4,25 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gpu-top"
-version = "0.1.0"
-description = "htop-style GPU monitor with docker container attribution"
-requires-python = ">=3.10"
+version = "0.2.0"
+description = "htop-style GPU monitor with docker container attribution, plus a client-server web dashboard"
+requires-python = ">=3.11"
+# The base package (TUI + agent) is deliberately dependency-free.
+
+[project.optional-dependencies]
+server = [
+    "fastapi",
+    "uvicorn",
+    "ldap3",
+    "itsdangerous",
+]
 
 [project.scripts]
 gpu-top = "gpu_top:cli"
+gpu-top-agent = "gpu_top.agent:cli"
+gpu-top-server = "gpu_top.server:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gpu_top"]
+# Ship the built React bundle (copied into server/static/ before building).
+artifacts = ["src/gpu_top/server/static/**"]

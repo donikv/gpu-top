@@ -1,0 +1,15 @@
+# Server config for local development: no LDAP, throwaway SQLite file.
+# Requires GPU_TOP_DEV=1 because auth is disabled.
+[server]
+host = "127.0.0.1"
+port = 8000
+db_path = "dev/dev.db"
+retention_days = 1
+session_secret = "dev-secret-not-for-production"
+stale_after = 10.0
+
+[agents]
+tokens = ["dev-token"]
+
+[auth]
+mode = "none"

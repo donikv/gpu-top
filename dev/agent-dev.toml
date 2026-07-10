@@ -1,0 +1,6 @@
+# Agent config for local development (use with dev/fake-nvidia-smi on PATH).
+[agent]
+server_name = "dev-box"
+url = "http://localhost:8000"
+token = "dev-token"
+interval = 2.0
