@@ -163,27 +163,42 @@ nixpkgs.lib.fakeHash;` (or leave the stale value), run
 error message into `flake.nix`. The placeholder hash committed initially must
 be replaced the same way on first build.
 
-### systemd units (bare-metal)
+### NixOS module (the recommended way to run agents)
 
-Agent (`/etc/systemd/system/gpu-top-agent.service`):
+The flake exports `nixosModules.agent`. In the flake that builds your GPU
+machines:
 
-```ini
-[Unit]
-Description=gpu-top agent
-After=network-online.target
+```nix
+{
+  inputs.gpu-top.url = "git+https://your.git.host/gpu-top";  # or a local path
 
-[Service]
-ExecStart=/run/current-system/sw/bin/gpu-top-agent -c /etc/gpu-top/agent.toml
-Restart=always
-RestartSec=5
+  # in the machine's configuration:
+  imports = [ inputs.gpu-top.nixosModules.agent ];
 
-[Install]
-WantedBy=multi-user.target
+  services.gpu-top-agent = {
+    enable = true;
+    url = "http://zver0.zesoi.fer.hr:8000";
+    # serverName defaults to networking.hostName
+    tokenFile = "/etc/gpu-top/agent-token";   # root-owned, mode 600
+  };
+}
 ```
 
-The server unit is identical with `gpu-top-server -c /etc/gpu-top/server.toml`
-plus `StateDirectory=gpu-top` (and point `db_path` at `/var/lib/gpu-top/`).
-A proper NixOS module (services.gpu-top.*) is future work.
+Write the token file once per machine (it never enters the nix store):
+
+```sh
+install -m 600 /dev/null /etc/gpu-top/agent-token
+printf '%s' "THE-TOKEN" > /etc/gpu-top/agent-token
+```
+
+The module writes `/etc/gpu-top/agent.toml` and a systemd unit whose PATH is
+`/run/current-system/sw/bin`, so nvidia-smi and docker come from the host
+system as intended. For non-NixOS bare-metal installs, an equivalent
+hand-written unit is a 6-liner: `ExecStart=gpu-top-agent -c
+/etc/gpu-top/agent.toml`, `Restart=always`, `WantedBy=multi-user.target`.
+
+The server can run the same way (`gpu-top-server -c ...` +
+`StateDirectory=gpu-top`), though the Docker image is the tested path.
 
 ## 5. Reverse proxy / TLS
 

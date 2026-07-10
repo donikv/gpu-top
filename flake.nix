@@ -96,6 +96,103 @@
         gpu-top-server = self.packages.${final.stdenv.hostPlatform.system}.gpu-top-server;
       };
 
+      # NixOS module for the push agent: import this on each GPU machine.
+      #   services.gpu-top-agent = {
+      #     enable = true;
+      #     url = "http://zver0.zesoi.fer.hr:8000";
+      #     tokenFile = "/etc/gpu-top/agent-token";   # written once, chmod 600
+      #   };
+      nixosModules.agent = { config, lib, pkgs, ... }:
+        let
+          cfg = config.services.gpu-top-agent;
+        in
+        {
+          options.services.gpu-top-agent = {
+            enable = lib.mkEnableOption "gpu-top metrics push agent";
+
+            package = lib.mkOption {
+              type = lib.types.package;
+              default = self.packages.${pkgs.stdenv.hostPlatform.system}.gpu-top;
+              defaultText = "gpu-top from this flake";
+              description = "Package providing the gpu-top-agent binary.";
+            };
+
+            serverName = lib.mkOption {
+              type = lib.types.str;
+              default = config.networking.hostName;
+              defaultText = "config.networking.hostName";
+              description = "Display name of this machine in the dashboard.";
+            };
+
+            url = lib.mkOption {
+              type = lib.types.str;
+              example = "http://zver0.zesoi.fer.hr:8000";
+              description = "Base URL of the central gpu-top server.";
+            };
+
+            tokenFile = lib.mkOption {
+              type = with lib.types; nullOr str;
+              default = null;
+              example = "/etc/gpu-top/agent-token";
+              description = ''
+                Path to a root-owned file containing the agent bearer token
+                (recommended: the token never enters the world-readable nix
+                store). Create it once with:
+                  install -m 600 /dev/null /etc/gpu-top/agent-token
+                  printf '%s' "THE-TOKEN" > /etc/gpu-top/agent-token
+              '';
+            };
+
+            token = lib.mkOption {
+              type = with lib.types; nullOr str;
+              default = null;
+              description = "Inline token. WARNING: ends up world-readable in /nix/store; prefer tokenFile.";
+            };
+
+            interval = lib.mkOption {
+              type = lib.types.str;
+              default = "5.0";
+              description = "Seconds between samples (TOML float literal).";
+            };
+          };
+
+          config = lib.mkIf cfg.enable {
+            assertions = [{
+              assertion = (cfg.token != null) != (cfg.tokenFile != null);
+              message = "services.gpu-top-agent: set exactly one of `token` or `tokenFile`.";
+            }];
+
+            environment.etc."gpu-top/agent.toml" = {
+              mode = "0600";
+              text = ''
+                [agent]
+                server_name = "${cfg.serverName}"
+                url = "${cfg.url}"
+                ${lib.optionalString (cfg.token != null) ''token = "${cfg.token}"''}
+                interval = ${cfg.interval}
+              '';
+            };
+
+            systemd.services.gpu-top-agent = {
+              description = "gpu-top metrics push agent";
+              wantedBy = [ "multi-user.target" ];
+              wants = [ "network-online.target" ];
+              after = [ "network-online.target" ];
+              serviceConfig = {
+                ExecStart = "${cfg.package}/bin/gpu-top-agent -c /etc/gpu-top/agent.toml";
+                Restart = "always";
+                RestartSec = 5;
+                # nvidia-smi and the docker CLI deliberately come from the
+                # host system profile (see the gpu-top package comment).
+                Environment =
+                  [ "PATH=/run/current-system/sw/bin" ]
+                  ++ lib.optional (cfg.tokenFile != null)
+                    "GPU_TOP_AGENT_TOKEN_FILE=${cfg.tokenFile}";
+              };
+            };
+          };
+        };
+
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
           packages = [
