@@ -39,7 +39,12 @@ URL, token, push interval.
 
 Secrets can be kept out of the files with environment variables:
 `GPU_TOP_SESSION_SECRET`, `GPU_TOP_SERVICE_PASSWORD` (LDAP service account),
-`GPU_TOP_AGENT_TOKEN`.
+`GPU_TOP_AGENT_TOKEN`. Each also has a `*_FILE` variant
+(e.g. `GPU_TOP_SERVICE_PASSWORD_FILE=/run/secrets/ldap_service_password`)
+that reads the value from a file — the docker-secrets convention; see
+[examples/docker-compose.zver0.yml](examples/docker-compose.zver0.yml) for a
+complete example where the password lives only in a root-owned file on the
+host.
 
 Generate the session secret and a token:
 
@@ -99,6 +104,15 @@ docker run -d --name gpu-top-server \
 ```
 
 The named volume holds the SQLite history so it survives container upgrades.
+
+If the LDAP server runs on the **same host** as the server container (e.g.
+zver0), no special networking is needed as long as the `[auth.ldap].uri` uses
+the host's FQDN: it resolves to the host's public address, which containers
+reach over the default bridge — the same path remote clients use. Only an
+slapd bound exclusively to 127.0.0.1 requires `network_mode: host`.
+[examples/docker-compose.zver0.yml](examples/docker-compose.zver0.yml) is a
+ready-made compose file for that setup, with the bind password supplied as a
+docker secret.
 
 ### Agent (on each GPU server)
 

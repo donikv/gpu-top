@@ -38,6 +38,25 @@ def test_ldap_tls_defaults(tmp_path):
     assert cfg.ldap.tls_verify is True
 
 
+def test_service_password_from_secret_file(tmp_path, monkeypatch):
+    secret = tmp_path / "ldap_service_password"
+    secret.write_text("from-secret-file\n")
+    path = tmp_path / "server.toml"
+    path.write_text(SERVER_TOML.replace('service_password = "pw"\n', ""))
+    monkeypatch.delenv("GPU_TOP_SERVICE_PASSWORD", raising=False)
+    monkeypatch.setenv("GPU_TOP_SERVICE_PASSWORD_FILE", str(secret))
+    cfg = load_server_config(str(path))
+    assert cfg.ldap.service_password == "from-secret-file"  # trailing \n stripped
+
+
+def test_missing_secret_file_is_a_config_error(tmp_path, monkeypatch):
+    path = tmp_path / "server.toml"
+    path.write_text(SERVER_TOML.replace('service_password = "pw"\n', ""))
+    monkeypatch.setenv("GPU_TOP_SERVICE_PASSWORD_FILE", str(tmp_path / "nope"))
+    with pytest.raises(ConfigError):
+        load_server_config(str(path))
+
+
 def test_auth_none_requires_dev_env(tmp_path, monkeypatch):
     monkeypatch.delenv("GPU_TOP_DEV", raising=False)
     path = tmp_path / "server.toml"

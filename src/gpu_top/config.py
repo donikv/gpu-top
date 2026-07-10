@@ -1,9 +1,13 @@
 """TOML config loading for the agent and the server.
 
-Secrets can be supplied via environment variables instead of the file:
-  GPU_TOP_AGENT_TOKEN      -> [agent].token
-  GPU_TOP_SERVICE_PASSWORD -> [auth.ldap].service_password
-  GPU_TOP_SESSION_SECRET   -> [server].session_secret
+Secrets can be supplied outside the TOML file, in order of precedence:
+  1. environment variable            GPU_TOP_AGENT_TOKEN
+  2. *_FILE variant naming a file    GPU_TOP_AGENT_TOKEN_FILE (docker secrets)
+  3. the value in the TOML file
+
+Available for: GPU_TOP_AGENT_TOKEN      -> [agent].token
+               GPU_TOP_SERVICE_PASSWORD -> [auth.ldap].service_password
+               GPU_TOP_SESSION_SECRET   -> [server].session_secret
 """
 import os
 import tomllib
@@ -33,6 +37,25 @@ def _require(section, key, where):
     return section[key]
 
 
+def _env_secret(name):
+    """GPU_TOP_<name> env var, or GPU_TOP_<name>_FILE pointing at a secret file
+    (the docker-secrets convention). Returns None if neither is set."""
+    value = os.environ.get(f"GPU_TOP_{name}")
+    if value:
+        return value
+    path = os.environ.get(f"GPU_TOP_{name}_FILE")
+    if path:
+        try:
+            with open(path) as f:
+                value = f.read().strip()
+        except OSError as e:
+            raise ConfigError(f"cannot read GPU_TOP_{name}_FILE ({path}): {e}")
+        if not value:
+            raise ConfigError(f"secret file GPU_TOP_{name}_FILE ({path}) is empty")
+        return value
+    return None
+
+
 @dataclass
 class AgentConfig:
     server_name: str
@@ -46,7 +69,7 @@ def load_agent_config(path):
     agent = data.get("agent")
     if not isinstance(agent, dict):
         raise ConfigError(f"{path} must contain an [agent] section")
-    token = os.environ.get("GPU_TOP_AGENT_TOKEN") or agent.get("token")
+    token = _env_secret("AGENT_TOKEN") or agent.get("token")
     if not token:
         raise ConfigError("set [agent].token or the GPU_TOP_AGENT_TOKEN env var")
     return AgentConfig(
@@ -94,7 +117,7 @@ def load_server_config(path):
             "auth.mode='none' disables login entirely; it is for local development "
             "only. Set GPU_TOP_DEV=1 in the environment if you really want this.")
 
-    session_secret = os.environ.get("GPU_TOP_SESSION_SECRET") or srv.get("session_secret")
+    session_secret = _env_secret("SESSION_SECRET") or srv.get("session_secret")
     if not session_secret:
         raise ConfigError(
             "set [server].session_secret (generate one with: "
@@ -110,10 +133,11 @@ def load_server_config(path):
         lc = auth.get("ldap")
         if not isinstance(lc, dict):
             raise ConfigError("auth.mode='ldap' requires an [auth.ldap] section")
-        password = os.environ.get("GPU_TOP_SERVICE_PASSWORD") or lc.get("service_password")
+        password = _env_secret("SERVICE_PASSWORD") or lc.get("service_password")
         if not password:
             raise ConfigError(
-                "set [auth.ldap].service_password or the GPU_TOP_SERVICE_PASSWORD env var")
+                "set [auth.ldap].service_password, the GPU_TOP_SERVICE_PASSWORD env "
+                "var, or GPU_TOP_SERVICE_PASSWORD_FILE pointing at a secret file")
         ldap = LdapConfig(
             uri=_require(lc, "uri", "auth.ldap"),
             service_dn=_require(lc, "service_dn", "auth.ldap"),
