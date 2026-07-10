@@ -23,6 +23,17 @@ session_hours = 12
 # this many seconds. Use ~3-6x the agents' push interval.
 stale_after = 30.0
 
+# Reverse-proxy / TLS. When a proxy (Caddy/nginx/traefik) terminates HTTPS and
+# forwards to this server, set behind_proxy = true so X-Forwarded-Proto is
+# trusted and the session cookie gets its Secure flag automatically. Also
+# bind host = "127.0.0.1" so the plaintext port is not reachable directly.
+behind_proxy = false
+trusted_proxies = "127.0.0.1"     # IP(s) of the proxy; uvicorn forwarded_allow_ips
+# Session-cookie Secure flag: "auto" follows the (proxy-corrected) scheme;
+# "always" forces it on (use if scheme detection is unreliable); "never" for
+# plain-HTTP dev only.
+cookie_secure = "auto"
+
 [agents]
 # Bearer tokens agents may use to push metrics. One shared token or one per
 # host both work; multiple entries let you rotate tokens without downtime.

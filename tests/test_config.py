@@ -36,6 +36,35 @@ def test_ldap_tls_defaults(tmp_path):
     cfg = load_server_config(str(path))
     assert cfg.ldap.starttls is False
     assert cfg.ldap.tls_verify is True
+    assert cfg.ldap.ca_cert_file == ""
+
+
+def test_proxy_and_cookie_options(tmp_path):
+    path = tmp_path / "server.toml"
+    path.write_text(SERVER_TOML.replace(
+        'session_secret = "s"',
+        'session_secret = "s"\nbehind_proxy = true\n'
+        'trusted_proxies = "10.0.0.1"\ncookie_secure = "always"'))
+    cfg = load_server_config(str(path))
+    assert cfg.behind_proxy is True
+    assert cfg.trusted_proxies == "10.0.0.1"
+    assert cfg.cookie_secure == "always"
+
+
+def test_cookie_secure_defaults_to_auto(tmp_path):
+    path = tmp_path / "server.toml"
+    path.write_text(SERVER_TOML)
+    cfg = load_server_config(str(path))
+    assert cfg.behind_proxy is False
+    assert cfg.cookie_secure == "auto"
+
+
+def test_bad_cookie_secure_rejected(tmp_path):
+    path = tmp_path / "server.toml"
+    path.write_text(SERVER_TOML.replace(
+        'session_secret = "s"', 'session_secret = "s"\ncookie_secure = "yes"'))
+    with pytest.raises(ConfigError):
+        load_server_config(str(path))
 
 
 def test_service_password_from_secret_file(tmp_path, monkeypatch):

@@ -20,7 +20,12 @@ def cli():
     config = load_server_config(args.config)
 
     import uvicorn
-    uvicorn.run(create_app(config), host=config.host, port=config.port)
+    kwargs = {}
+    if config.behind_proxy:
+        # Trust X-Forwarded-Proto/-For from the reverse proxy so request.url.scheme
+        # becomes "https" and the Secure cookie flag is set correctly.
+        kwargs.update(proxy_headers=True, forwarded_allow_ips=config.trusted_proxies)
+    uvicorn.run(create_app(config), host=config.host, port=config.port, **kwargs)
 
 
 if __name__ == "__main__":

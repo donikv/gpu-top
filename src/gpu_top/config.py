@@ -89,6 +89,7 @@ class LdapConfig:
     user_filter: str = "(uid={username})"
     starttls: bool = False       # upgrade a ldap:// connection to TLS before binding
     tls_verify: bool = True      # False = accept any certificate (TLS_REQCERT allow)
+    ca_cert_file: str = ""       # CA bundle to validate the LDAP cert against
 
 
 @dataclass
@@ -103,6 +104,9 @@ class ServerConfig:
     agent_tokens: list = field(default_factory=list)
     auth_mode: str = "ldap"          # "ldap" | "none" (dev only)
     ldap: LdapConfig | None = None
+    behind_proxy: bool = False       # trust X-Forwarded-* from trusted_proxies
+    trusted_proxies: str = "127.0.0.1"  # uvicorn forwarded_allow_ips
+    cookie_secure: str = "auto"      # "auto" (by request scheme) | "always" | "never"
 
 
 def load_server_config(path):
@@ -128,6 +132,12 @@ def load_server_config(path):
     if not tokens:
         raise ConfigError("set at least one token in [agents].tokens")
 
+    cookie_secure = str(srv.get("cookie_secure", "auto"))
+    if cookie_secure not in ("auto", "always", "never"):
+        raise ConfigError(
+            f"[server].cookie_secure must be 'auto', 'always' or 'never', "
+            f"got {cookie_secure!r}")
+
     ldap = None
     if mode == "ldap":
         lc = auth.get("ldap")
@@ -146,6 +156,7 @@ def load_server_config(path):
             user_filter=lc.get("user_filter", "(uid={username})"),
             starttls=bool(lc.get("starttls", False)),
             tls_verify=bool(lc.get("tls_verify", True)),
+            ca_cert_file=str(lc.get("ca_cert_file", "")),
         )
 
     return ServerConfig(
@@ -159,4 +170,7 @@ def load_server_config(path):
         agent_tokens=list(tokens),
         auth_mode=mode,
         ldap=ldap,
+        behind_proxy=bool(srv.get("behind_proxy", False)),
+        trusted_proxies=str(srv.get("trusted_proxies", "127.0.0.1")),
+        cookie_secure=cookie_secure,
     )

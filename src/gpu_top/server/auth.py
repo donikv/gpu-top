@@ -30,6 +30,20 @@ def _signer(request: Request) -> TimestampSigner:
     return TimestampSigner(request.app.state.config.session_secret)
 
 
+def _cookie_secure(request: Request) -> bool:
+    """Whether to set the Secure flag on the session cookie.
+
+    'auto' trusts request.url.scheme (correct once uvicorn honors the proxy's
+    X-Forwarded-Proto, i.e. server.behind_proxy = true); 'always'/'never' pin it
+    for setups where scheme detection can't be trusted."""
+    mode = request.app.state.config.cookie_secure
+    if mode == "always":
+        return True
+    if mode == "never":
+        return False
+    return request.url.scheme == "https"
+
+
 def require_user(request: Request) -> str:
     """FastAPI dependency: return the logged-in username or raise 401."""
     raw = request.cookies.get(COOKIE)
@@ -53,8 +67,11 @@ def _ldap_authenticate(cfg, username, password):
 
     # tls_verify=False mirrors OpenLDAP's `TLS_REQCERT allow` (self-signed or
     # unvalidated certs); applies to both ldaps:// and STARTTLS connections.
+    # ca_cert_file, when set, validates against a specific CA bundle instead of
+    # the system trust store.
     tls = ldap3.Tls(
-        validate=ssl.CERT_REQUIRED if cfg.tls_verify else ssl.CERT_NONE)
+        validate=ssl.CERT_REQUIRED if cfg.tls_verify else ssl.CERT_NONE,
+        ca_certs_file=cfg.ca_cert_file or None)
     server = ldap3.Server(cfg.uri, connect_timeout=5, tls=tls)
     # STARTTLS upgrades a plain ldap:// connection to TLS before any bind is
     # sent (the equivalent of pam_ldap's `ssl start_tls` / nixos useTLS).
@@ -106,7 +123,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
         COOKIE, signed,
         max_age=int(cfg.session_hours * 3600),
         httponly=True, samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=_cookie_secure(request),
     )
     return {"user": user}
 

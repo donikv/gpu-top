@@ -200,38 +200,96 @@ hand-written unit is a 6-liner: `ExecStart=gpu-top-agent -c
 The server can run the same way (`gpu-top-server -c ...` +
 `StateDirectory=gpu-top`), though the Docker image is the tested path.
 
-## 5. Reverse proxy / TLS
+## 5. Serving the app over HTTPS (reverse proxy)
 
-Run the server behind a TLS-terminating proxy; the session cookie is set with
-`Secure` automatically when the request scheme is https. Caddy:
+Out of the box the server speaks plain HTTP, so **logins and agent tokens cross
+the network in cleartext**. Put a TLS-terminating reverse proxy in front before
+real use. The proxy handles certificates; the gpu-top server keeps speaking
+HTTP but only to the proxy.
 
-```
-gpu.example.org {
-    reverse_proxy localhost:8000
-}
-```
+Three changes turn the plaintext setup into a proper HTTPS one:
 
-nginx:
+1. In `server.toml`, stop exposing the plaintext port and trust the proxy:
+   ```toml
+   [server]
+   host = "127.0.0.1"       # only the proxy (same host) can reach it
+   behind_proxy = true      # trust X-Forwarded-Proto from the proxy
+   trusted_proxies = "127.0.0.1"   # the proxy's source IP
+   cookie_secure = "auto"   # now resolves to Secure, because scheme is https
+   ```
+   `behind_proxy = true` makes uvicorn honor the proxy's `X-Forwarded-Proto`, so
+   `request.url.scheme` becomes `https` and the session cookie is issued with the
+   `Secure` flag. If your proxy runs on a **different host/container**, set
+   `trusted_proxies` to its IP (uvicorn ignores forwarded headers from untrusted
+   sources), or just set `cookie_secure = "always"`.
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name gpu.example.org;
-    # ssl_certificate ...; ssl_certificate_key ...;
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-}
-```
+   In Docker, don't publish 8000 to the world — put the proxy and the server on
+   the same docker network and let the proxy reach `server:8000`, or bind the
+   published port to localhost (`-p 127.0.0.1:8000:8000`).
 
-If TLS is terminated at the proxy, run uvicorn with `--proxy-headers` semantics
-by fronting it on localhost only (the default config binds 0.0.0.0 — restrict
-`[server].host` to 127.0.0.1 when a proxy is in front).
+2. Point a proxy at it. **Caddy** (gets a Let's Encrypt cert automatically):
+   ```
+   gpu.example.org {
+       reverse_proxy 127.0.0.1:8000
+   }
+   ```
+   Caddy sends `X-Forwarded-Proto` by default. **nginx**:
+   ```nginx
+   server {
+       listen 443 ssl;
+       server_name gpu.example.org;
+       ssl_certificate     /etc/ssl/gpu.example.org.crt;
+       ssl_certificate_key /etc/ssl/gpu.example.org.key;
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_set_header X-Forwarded-For $remote_addr;
+       }
+   }
+   # optional: redirect :80 -> :443
+   ```
+   On NixOS, `services.caddy.virtualHosts."gpu.example.org".extraConfig =
+   "reverse_proxy 127.0.0.1:8000";` is the whole thing (plus opening 80/443 in
+   the firewall for the ACME challenge).
 
-Agents talk to the same public URL (`url = "https://gpu.example.org"`), so
-their pushes are TLS-protected too.
+3. Point the agents at the HTTPS URL: `url = "https://gpu.example.org"` in each
+   `agent.toml` (or `services.gpu-top-agent.url`), and set `SERVER_URL` in
+   `deploy.sh` to the same. Their pushes are then TLS-protected too, and the
+   agent (stdlib urllib) validates the certificate normally.
+
+Verify: `curl -sI https://gpu.example.org/api/me` should return `401` over TLS,
+and the `Set-Cookie` on a login response should include `Secure`.
+
+## 6. Encrypting the LDAP connection
+
+The dashboard authenticates against the same directory as your NixOS clients.
+The example config mirrors those clients' `TLS_REQCERT allow` with
+`tls_verify = false`, which means the STARTTLS connection is encrypted **but the
+server's certificate is not validated** — an attacker who can MITM the
+server↔LDAP path could capture the `cn=administrator` bind password. To close
+that:
+
+1. Get the CA certificate that signed the LDAP server's cert (on the zver
+   clients it may be referenced as `TLS_CACERT /etc/ldap_ssl/ca.crt`). Copy it
+   to the monitoring host, e.g. `/etc/gpu-top/ldap-ca.crt`, and mount it into
+   the container (`-v /etc/gpu-top/ldap-ca.crt:/etc/gpu-top/ldap-ca.crt:ro`).
+2. Flip the config to validate against that CA:
+   ```toml
+   [auth.ldap]
+   uri = "ldaps://zver0.zesoi.fer.hr"   # or keep ldap:// with starttls = true
+   starttls = true                      # (drop if you switch to ldaps://)
+   tls_verify = true
+   ca_cert_file = "/etc/gpu-top/ldap-ca.crt"   # omit to use the system trust store
+   ```
+`tls_verify = true` also requires the certificate's subject/SAN to match the
+`uri` hostname, so use the FQDN the cert was issued for. Test the whole chain
+with `ldapsearch` from the monitoring host first (see §2) using `-ZZ` (which
+*requires* a valid STARTTLS handshake) — if that succeeds, gpu-top will too.
+
+Also consider swapping `cn=administrator` for a **read-only service account**
+that can only search the user subtree: the dashboard only needs to find DNs and
+test-bind, never write, so an admin-level bind is more privilege than required.
 
 ## 6. Local development (no GPU needed)
 

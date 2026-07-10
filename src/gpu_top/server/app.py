@@ -4,7 +4,7 @@ import contextlib
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from . import api, auth, ingest
@@ -47,9 +47,13 @@ def create_app(config) -> FastAPI:
         app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
         # SPA fallback: any non-API path serves index.html so client-side
-        # routes and hard refreshes work.
+        # routes and hard refreshes work. Unknown /api/* paths must 404 (as
+        # JSON), not fall through to index.html — otherwise the frontend tries
+        # to JSON-parse an HTML page.
         @app.get("/{path:path}", include_in_schema=False)
         def spa(path: str):
+            if path == "api" or path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="not found")
             candidate = STATIC_DIR / path
             if path and ".." not in path and candidate.is_file():
                 return FileResponse(candidate)

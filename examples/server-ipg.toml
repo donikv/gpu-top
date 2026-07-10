@@ -7,8 +7,15 @@
 # two "FILL-ME" values.
 
 [server]
+# Direct HTTP on all interfaces to start with. Once a TLS reverse proxy is in
+# front (recommended — see DEPLOY.md §5), change to:
+#   host = "127.0.0.1"      # only the proxy can reach it
+#   behind_proxy = true     # trust the proxy's X-Forwarded-Proto
 host = "0.0.0.0"
 port = 8000
+behind_proxy = false
+trusted_proxies = "127.0.0.1"
+cookie_secure = "auto"      # becomes Secure automatically once behind_proxy=true
 db_path = "/var/lib/gpu-top/metrics.db"
 retention_days = 7
 
@@ -32,6 +39,10 @@ mode = "ldap"
 uri = "ldap://zver0.zesoi.fer.hr"
 starttls = true
 tls_verify = false
+# RECOMMENDED once you have the CA cert: set tls_verify = true and point
+# ca_cert_file at it (see DEPLOY.md section 6) so the admin bind password
+# cannot be captured by a MITM on the server-to-LDAP path.
+#ca_cert_file = "/etc/gpu-top/ldap-ca.crt"
 
 # Same service account the PAM clients bind with (binddn).
 # The password is deliberately NOT in this file: supply it on the server via
