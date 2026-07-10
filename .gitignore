@@ -13,3 +13,7 @@ web/dist/
 # built web bundle (copied in at package time by Docker/Nix)
 src/gpu_top/server/static/*
 !src/gpu_top/server/static/.gitkeep
+
+# local deployment script + its secrets (never commit)
+deploy.sh
+.deploy-secrets.env
