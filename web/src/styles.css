@@ -143,6 +143,16 @@ body {
   cursor: pointer;
 }
 
+/* second control row under the topbar: time window + view toggle */
+.controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  margin-bottom: 6px;
+}
+
 .banner {
   padding: 12px 16px;
   margin: 12px 0;

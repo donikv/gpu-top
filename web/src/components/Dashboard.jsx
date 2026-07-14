@@ -84,6 +84,14 @@ export default function Dashboard({ user, onLogout }) {
           ))}
         </div>
 
+        <div className="topbar-right">
+          <span className="user">{user}</span>
+          <button onClick={onLogout}>Log out</button>
+        </div>
+      </header>
+
+      {/* second control row, below the topbar's dividing line */}
+      <div className="controls-bar">
         <WindowPicker value={win} onChange={setWin} />
 
         {/* view toggle: same chip styling, single on/off state */}
@@ -91,14 +99,9 @@ export default function Dashboard({ user, onLogout }) {
           className={`chip${view === 'cluster' ? ' active' : ''}`}
           onClick={() => setView(view === 'cluster' ? 'cards' : 'cluster')}
         >
-          Cluster
+          Cluster overview
         </button>
-
-        <div className="topbar-right">
-          <span className="user">{user}</span>
-          <button onClick={onLogout}>Log out</button>
-        </div>
-      </header>
+      </div>
 
       {error && (
         <div className="banner error">
