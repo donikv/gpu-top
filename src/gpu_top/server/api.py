@@ -17,6 +17,24 @@ def current(request: Request):
     return {"servers": request.app.state.db.current(stale_after=cfg.stale_after)}
 
 
+@router.get("/api/cluster")
+def cluster(
+    request: Request,
+    minutes: int = Query(default=60, ge=1, le=60 * 24 * 31),
+    points: int = Query(default=200, ge=2, le=2000),
+    start: float | None = Query(default=None, ge=0),
+    end: float | None = Query(default=None, ge=0),
+):
+    """Util/mem series for every server+GPU at once (cluster overview)."""
+    if (start is None) != (end is None):
+        raise HTTPException(status_code=422, detail="start and end must be given together")
+    if start is not None and end <= start:
+        raise HTTPException(status_code=422, detail="end must be after start")
+    servers, since, until = request.app.state.db.cluster_history(
+        minutes, points, start=start, end=end)
+    return {"servers": servers, "since": since, "until": until}
+
+
 @router.get("/api/history")
 def history(
     request: Request,

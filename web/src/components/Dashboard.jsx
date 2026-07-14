@@ -15,6 +15,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { usePolling } from '../hooks/usePolling'
+import ClusterView from './ClusterView'
 import ServerSection from './ServerSection'
 import WindowPicker from './WindowPicker'
 
@@ -35,6 +36,10 @@ export default function Dashboard({ user, onLogout }) {
   // range in the past. Owned here, rendered by WindowPicker, consumed by
   // every GpuCard's useHistory.
   const [win, setWin] = useState({ minutes: 60 })
+
+  // Two ways to look at the fleet: detailed per-server cards, or the compact
+  // cluster overview (all servers side by side, one line per GPU).
+  const [view, setView] = useState('cards') // 'cards' | 'cluster'
 
   const servers = data ? data.servers : []
 
@@ -79,6 +84,14 @@ export default function Dashboard({ user, onLogout }) {
 
         <WindowPicker value={win} onChange={setWin} />
 
+        {/* view toggle: same chip styling, single on/off state */}
+        <button
+          className={`chip${view === 'cluster' ? ' active' : ''}`}
+          onClick={() => setView(view === 'cluster' ? 'cards' : 'cluster')}
+        >
+          Cluster
+        </button>
+
         <div className="topbar-right">
           <span className="user">{user}</span>
           <button onClick={onLogout}>Log out</button>
@@ -97,11 +110,15 @@ export default function Dashboard({ user, onLogout }) {
         </div>
       )}
 
-      {visible.map((server) => (
-        // Composition: Dashboard doesn't know how a server is drawn; it just
-        // hands each server object down as a prop.
-        <ServerSection key={server.name} server={server} win={win} />
-      ))}
+      {view === 'cluster' ? (
+        <ClusterView liveServers={servers} visibleNames={selected} win={win} />
+      ) : (
+        visible.map((server) => (
+          // Composition: Dashboard doesn't know how a server is drawn; it
+          // just hands each server object down as a prop.
+          <ServerSection key={server.name} server={server} win={win} />
+        ))
+      )}
     </div>
   )
 }

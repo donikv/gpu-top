@@ -301,6 +301,36 @@ body {
   dominant-baseline: middle;
 }
 
+/* ------------------------------------------------------------ cluster view */
+
+.cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.cluster-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cluster-cell.stale { opacity: 0.45; }
+.cluster-cell-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cluster-name { font-weight: 600; }
+.cluster-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
 /* ----------------------------------------------------------- process table */
 
 /* On phones the table is wider than the screen: the wrapper scrolls

@@ -101,6 +101,20 @@ def test_history_explicit_range(client):
         "server": "hydra1", "gpu": 0, "start": now, "end": now - 300}).status_code == 422
 
 
+def test_cluster_endpoint(client):
+    client.post("/api/ingest", json=payload("zver10"), headers=auth())
+    client.post("/api/ingest", json=payload("zver2"), headers=auth())
+    login(client)
+    r = client.get("/api/cluster", params={"minutes": 5}).json()
+    assert [s["name"] for s in r["servers"]] == ["zver2", "zver10"]  # natural order
+    gpu = r["servers"][0]["gpus"][0]
+    assert gpu["gpu_index"] == 0
+    assert gpu["points"][0]["util_pct"] == 42.0
+    assert gpu["points"][0]["mem_pct"] == 50.0   # 100/200 MiB
+    assert r["since"] < r["until"]
+    assert client.get("/api/cluster").status_code == 200  # defaults work
+
+
 def test_login_rejects_empty_password(client):
     r = client.post("/api/login", json={"username": "dev", "password": ""})
     assert r.status_code == 401

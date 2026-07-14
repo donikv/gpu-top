@@ -191,3 +191,42 @@ class Database:
         return ([dict(ts=r["t"], util_pct=r["util_pct"], mem_pct=r["mem_pct"],
                       temp_c=r["temp_c"], power_w=r["power_w"]) for r in rows],
                 since, until)
+
+    def cluster_history(self, minutes, points, start=None, end=None):
+        """Bucketed util/mem series for EVERY server and GPU, one query.
+
+        Powers the cluster-overview page; per-GPU /api/history calls would be
+        servers x gpus requests, this is one."""
+        if start is not None and end is not None:
+            since, until = start, end
+        else:
+            until = time.time()
+            since = until - minutes * 60
+        bucket = max(1.0, (until - since) / points)
+        rows = self.conn.execute(
+            """SELECT server_id, gpu_index,
+                      CAST(ts / :bucket AS INT) * :bucket AS t,
+                      AVG(util_pct) AS util_pct,
+                      AVG(CASE WHEN mem_total_mib > 0
+                          THEN mem_used_mib / mem_total_mib * 100 END) AS mem_pct
+               FROM gpu_samples
+               WHERE ts >= :since AND ts <= :until
+               GROUP BY server_id, gpu_index, t
+               ORDER BY t""",
+            dict(bucket=bucket, since=since, until=until)).fetchall()
+        names = {r["id"]: r["name"] for r in
+                 self.conn.execute("SELECT id, name FROM servers")}
+        series = {}  # name -> {gpu_index -> [points]}
+        for r in rows:
+            name = names.get(r["server_id"])
+            if name is None:
+                continue
+            series.setdefault(name, {}).setdefault(r["gpu_index"], []).append(
+                dict(ts=r["t"], util_pct=r["util_pct"], mem_pct=r["mem_pct"]))
+        servers = [
+            dict(name=name,
+                 gpus=[dict(gpu_index=g, points=pts)
+                       for g, pts in sorted(series[name].items())])
+            for name in sorted(series, key=natural_key)
+        ]
+        return servers, since, until

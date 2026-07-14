@@ -40,6 +40,18 @@ export const api = {
   // Latest sample for every server (the dashboard poll).
   current: () => request('/api/current'),
 
+  // Every server's per-GPU series in one response (cluster overview).
+  cluster: (win, points = 200) => {
+    const params = new URLSearchParams({ points })
+    if (win.start != null) {
+      params.set('start', win.start)
+      params.set('end', win.end)
+    } else {
+      params.set('minutes', win.minutes)
+    }
+    return request(`/api/cluster?${params}`)
+  },
+
   // Downsampled time series for one GPU. `win` is either { minutes: N }
   // (rolling window) or { start, end } (fixed past range, epoch seconds).
   history: (server, gpu, win, points = 300) => {
