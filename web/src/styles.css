@@ -237,7 +237,7 @@ body {
   .gpu-grid { grid-template-columns: 1fr; }
 }
 
-.window-picker { display: flex; gap: 4px; }
+.window-picker { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .window-picker button {
   padding: 3px 10px;
   font-size: 12px;
@@ -254,6 +254,29 @@ body {
 }
 
 .chart-loading { color: var(--text-dim); font-size: 12px; padding: 20px 0; }
+
+/* custom past-range inputs inside the global window picker */
+.range-inputs { display: flex; gap: 4px; align-items: center; }
+.range-inputs input {
+  padding: 3px 6px;
+  font-size: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color-scheme: dark;          /* native picker matches the theme */
+}
+.range-inputs button {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: var(--accent-util);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.range-inputs button:disabled { opacity: 0.4; cursor: default; }
+.range-sep { color: var(--text-dim); font-size: 12px; }
 
 /* --------------------------------------------------------------- sparkline */
 

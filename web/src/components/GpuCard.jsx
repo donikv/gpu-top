@@ -1,31 +1,20 @@
 // === GpuCard.jsx: one GPU's live numbers + history charts ===================
 // React concepts:
-//   * props are read-only inputs; all interactivity that belongs to THIS card
-//     (the selected time window) is local state with useState.
-//   * state is per component INSTANCE: every GpuCard has its own `minutes`,
-//     which is why each card can show a different window at the same time.
-import { useState } from 'react'
+//   * props are read-only inputs. The time window (`win`) deliberately lives
+//     in Dashboard, not here — ONE picker drives every chart on the page, so
+//     the cards just receive it and stay in sync ("lifting state up").
 import { useHistory } from '../hooks/useHistory'
 import Gauge from './Gauge'
 import Sparkline from './Sparkline'
 
 // Plain data + tiny helpers can live next to the component. Not everything
 // needs to be React.
-const WINDOWS = [
-  { label: '15m', minutes: 15 },
-  { label: '1h', minutes: 60 },
-  { label: '6h', minutes: 360 },
-  { label: '24h', minutes: 1440 },
-]
-
 const fmt = (v, suffix = '') => (v == null ? '–' : `${Math.round(v)}${suffix}`)
 
-export default function GpuCard({ serverName, gpu }) {
-  const [minutes, setMinutes] = useState(60)
-
+export default function GpuCard({ serverName, gpu, win }) {
   // Hooks compose: this custom hook re-fetches whenever the window changes,
-  // because `minutes` is in its dependency array.
-  const history = useHistory(serverName, gpu.gpu_index, minutes)
+  // because the window fields are in its dependency array.
+  const history = useHistory(serverName, gpu.gpu_index, win)
 
   const memPct =
     gpu.mem_total_mib > 0 ? (gpu.mem_used_mib / gpu.mem_total_mib) * 100 : null
@@ -52,20 +41,6 @@ export default function GpuCard({ serverName, gpu }) {
         <span>
           {fmt(gpu.mem_used_mib)}/{fmt(gpu.mem_total_mib)} MiB
         </span>
-      </div>
-
-      <div className="window-picker">
-        {WINDOWS.map((w) => (
-          <button
-            key={w.label}
-            // Toggling a class based on state — React re-renders, the CSS
-            // does the highlighting.
-            className={w.minutes === minutes ? 'active' : ''}
-            onClick={() => setMinutes(w.minutes)}
-          >
-            {w.label}
-          </button>
-        ))}
       </div>
 
       {history === null ? (

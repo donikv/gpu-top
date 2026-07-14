@@ -82,6 +82,25 @@ def test_full_flow(client):
     assert hist["since"] < hist["until"]   # requested window shipped to the UI
 
 
+def test_history_explicit_range(client):
+    client.post("/api/ingest", json=payload(), headers=auth())
+    login(client)
+    now = time.time()
+    r = client.get("/api/history", params={
+        "server": "hydra1", "gpu": 0, "start": now - 300, "end": now}).json()
+    assert len(r["points"]) == 1
+    assert r["since"] == now - 300 and r["until"] == now
+    # a range fully in the past contains nothing
+    r = client.get("/api/history", params={
+        "server": "hydra1", "gpu": 0, "start": now - 900, "end": now - 600}).json()
+    assert r["points"] == []
+    # half a range / inverted range are rejected
+    assert client.get("/api/history", params={
+        "server": "hydra1", "gpu": 0, "start": now - 300}).status_code == 422
+    assert client.get("/api/history", params={
+        "server": "hydra1", "gpu": 0, "start": now, "end": now - 300}).status_code == 422
+
+
 def test_login_rejects_empty_password(client):
     r = client.post("/api/login", json={"username": "dev", "password": ""})
     assert r.status_code == 401

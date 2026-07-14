@@ -24,8 +24,16 @@ def history(
     gpu: int,
     minutes: int = Query(default=60, ge=1, le=60 * 24 * 31),
     points: int = Query(default=300, ge=2, le=2000),
+    # explicit past range (epoch seconds); overrides `minutes` when both given
+    start: float | None = Query(default=None, ge=0),
+    end: float | None = Query(default=None, ge=0),
 ):
-    result = request.app.state.db.history(server, gpu, minutes, points)
+    if (start is None) != (end is None):
+        raise HTTPException(status_code=422, detail="start and end must be given together")
+    if start is not None and end <= start:
+        raise HTTPException(status_code=422, detail="end must be after start")
+    result = request.app.state.db.history(server, gpu, minutes, points,
+                                          start=start, end=end)
     if result is None:
         raise HTTPException(status_code=404, detail=f"unknown server {server!r}")
     rows, since, until = result

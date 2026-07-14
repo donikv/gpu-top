@@ -10,9 +10,11 @@ import { api } from '../api'
 const REFRESH_MS = 10000 // normal cadence: history moves slowly
 const RETRY_MS = 3000    // sparse data or a failed fetch: check back sooner
 
-export function useHistory(server, gpu, minutes) {
+export function useHistory(server, gpu, win) {
   // history = { points, since, until } — since/until are the requested time
   // window so charts can place partial data correctly. null = still loading.
+  // `win` is { minutes: N } (rolling, keeps refreshing) or { start, end }
+  // (a fixed range in the past — fetched once, nothing new can appear).
   const [history, setHistory] = useState(null)
 
   useEffect(() => {
@@ -21,17 +23,20 @@ export function useHistory(server, gpu, minutes) {
     // can't overwrite data from the NEW one.
     let cancelled = false
     let timer = null
+    const isFixedRange = win.start != null
 
     // A setTimeout CHAIN instead of setInterval: each response schedules the
     // next fetch, so the delay can adapt (fast while sparse/failing) and a
     // slow response never stacks up behind an impatient interval.
     const tick = () => {
       api
-        .history(server, gpu, minutes)
+        .history(server, gpu, win)
         .then((data) => {
           if (cancelled) return
           setHistory(data)
-          timer = setTimeout(tick, data.points.length < 2 ? RETRY_MS : REFRESH_MS)
+          if (!isFixedRange) {
+            timer = setTimeout(tick, data.points.length < 2 ? RETRY_MS : REFRESH_MS)
+          }
         })
         .catch(() => {
           if (cancelled) return
@@ -60,10 +65,10 @@ export function useHistory(server, gpu, minutes) {
       clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
-    // Re-run whenever WHAT we're looking at changes. If a dependency is
-    // missing from this array, the hook would keep showing stale data —
-    // eslint's react-hooks plugin exists to catch exactly that.
-  }, [server, gpu, minutes])
+    // Re-run whenever WHAT we're looking at changes. The window object's
+    // FIELDS are listed (not the object itself): a fresh-but-equal object
+    // wouldn't needlessly refetch, and a changed field always does.
+  }, [server, gpu, win.minutes, win.start, win.end])
 
   return history
 }

@@ -158,18 +158,23 @@ class Database:
             ))
         return out
 
-    def history(self, server_name, gpu_index, minutes, points):
+    def history(self, server_name, gpu_index, minutes, points, start=None, end=None):
         """Time-bucketed averages so the response never exceeds `points` rows.
 
-        Returns (rows, since, until) — the requested window bounds let the UI
-        position partial data honestly instead of stretching it."""
+        The window is either the last `minutes`, or an explicit [start, end]
+        range (epoch seconds) when both are given. Returns (rows, since, until)
+        — the window bounds let the UI position partial data honestly instead
+        of stretching it."""
         row = self.conn.execute(
             "SELECT id FROM servers WHERE name=?", (server_name,)).fetchone()
         if not row:
             return None
-        until = time.time()
-        since = until - minutes * 60
-        bucket = max(1.0, minutes * 60 / points)
+        if start is not None and end is not None:
+            since, until = start, end
+        else:
+            until = time.time()
+            since = until - minutes * 60
+        bucket = max(1.0, (until - since) / points)
         rows = self.conn.execute(
             """SELECT CAST(ts / :bucket AS INT) * :bucket AS t,
                       AVG(util_pct) AS util_pct,
@@ -178,9 +183,11 @@ class Database:
                       AVG(temp_c) AS temp_c,
                       AVG(power_w) AS power_w
                FROM gpu_samples
-               WHERE server_id = :sid AND gpu_index = :gpu AND ts >= :since
+               WHERE server_id = :sid AND gpu_index = :gpu
+                 AND ts >= :since AND ts <= :until
                GROUP BY t ORDER BY t""",
-            dict(bucket=bucket, sid=row["id"], gpu=gpu_index, since=since)).fetchall()
+            dict(bucket=bucket, sid=row["id"], gpu=gpu_index,
+                 since=since, until=until)).fetchall()
         return ([dict(ts=r["t"], util_pct=r["util_pct"], mem_pct=r["mem_pct"],
                       temp_c=r["temp_c"], power_w=r["power_w"]) for r in rows],
                 since, until)

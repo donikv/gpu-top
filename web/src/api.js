@@ -40,10 +40,16 @@ export const api = {
   // Latest sample for every server (the dashboard poll).
   current: () => request('/api/current'),
 
-  // Downsampled time series for one GPU. minutes controls the window.
-  history: (server, gpu, minutes, points = 300) =>
-    request(
-      `/api/history?server=${encodeURIComponent(server)}&gpu=${gpu}` +
-        `&minutes=${minutes}&points=${points}`,
-    ),
+  // Downsampled time series for one GPU. `win` is either { minutes: N }
+  // (rolling window) or { start, end } (fixed past range, epoch seconds).
+  history: (server, gpu, win, points = 300) => {
+    const params = new URLSearchParams({ server, gpu, points })
+    if (win.start != null) {
+      params.set('start', win.start)
+      params.set('end', win.end)
+    } else {
+      params.set('minutes', win.minutes)
+    }
+    return request(`/api/history?${params}`)
+  },
 }

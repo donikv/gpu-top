@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { api } from '../api'
 import { usePolling } from '../hooks/usePolling'
 import ServerSection from './ServerSection'
+import WindowPicker from './WindowPicker'
 
 const POLL_MS = 2000
 
@@ -28,6 +29,12 @@ export default function Dashboard({ user, onLogout }) {
 
   // The selected subset of servers. Empty Set = no filter = show everything.
   const [selected, setSelected] = useState(new Set())
+
+  // ONE time window for every chart on the page ("lifting state up"):
+  // { minutes: N } for a live rolling window, { start, end } for a fixed
+  // range in the past. Owned here, rendered by WindowPicker, consumed by
+  // every GpuCard's useHistory.
+  const [win, setWin] = useState({ minutes: 60 })
 
   const servers = data ? data.servers : []
 
@@ -70,6 +77,8 @@ export default function Dashboard({ user, onLogout }) {
           ))}
         </div>
 
+        <WindowPicker value={win} onChange={setWin} />
+
         <div className="topbar-right">
           <span className="user">{user}</span>
           <button onClick={onLogout}>Log out</button>
@@ -91,7 +100,7 @@ export default function Dashboard({ user, onLogout }) {
       {visible.map((server) => (
         // Composition: Dashboard doesn't know how a server is drawn; it just
         // hands each server object down as a prop.
-        <ServerSection key={server.name} server={server} />
+        <ServerSection key={server.name} server={server} win={win} />
       ))}
     </div>
   )

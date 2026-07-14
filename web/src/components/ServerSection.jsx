@@ -7,7 +7,7 @@ import GpuCard from './GpuCard'
 import ProcessTable from './ProcessTable'
 import StaleBadge from './StaleBadge'
 
-export default function ServerSection({ server }) {
+export default function ServerSection({ server, win }) {
   return (
     // Template-literal className: append the modifier class only when stale.
     <section className={`server-section${server.stale ? ' stale' : ''}`}>
@@ -18,7 +18,7 @@ export default function ServerSection({ server }) {
 
       <div className="gpu-grid">
         {server.gpus.map((gpu) => (
-          <GpuCard key={gpu.gpu_index} serverName={server.name} gpu={gpu} />
+          <GpuCard key={gpu.gpu_index} serverName={server.name} gpu={gpu} win={win} />
         ))}
       </div>
 
