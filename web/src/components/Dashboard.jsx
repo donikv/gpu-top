@@ -59,6 +59,8 @@ export default function Dashboard({ user, onLogout }) {
   return (
     <div className="dashboard">
       <header className="topbar">
+        {/* files in web/public/ are served from the site root as-is */}
+        <img src="/android-chrome-192x192.png" alt="" className="logo" />
         <h1>gpu-top</h1>
 
         {/* Filter chips: click any combination of servers; "All" clears. */}

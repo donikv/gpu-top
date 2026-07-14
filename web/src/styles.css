@@ -100,6 +100,11 @@ body {
 
 .topbar h1 { margin: 0; font-size: 18px; }
 
+/* the pixel-art mascot, scaled to the title's height */
+.logo { height: 30px; width: 30px; }
+.login-title { display: flex; align-items: center; gap: 10px; }
+.login-title .logo { height: 34px; width: 34px; }
+
 /* server filter chips: any subset can be toggled on */
 .server-chips {
   display: flex;

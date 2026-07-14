@@ -31,7 +31,10 @@ export default function LoginPage({ onLogin }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={handleSubmit}>
-        <h1>gpu-top</h1>
+        <div className="login-title">
+          <img src="/android-chrome-192x192.png" alt="" className="logo" />
+          <h1>gpu-top</h1>
+        </div>
         <p className="login-hint">Sign in with your LDAP account</p>
 
         {/* value + onChange = controlled input */}
