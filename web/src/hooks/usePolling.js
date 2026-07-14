@@ -41,12 +41,20 @@ export function usePolling(fn, intervalMs) {
     tick() // fetch immediately, don't wait a full interval for first data
     const id = setInterval(tick, intervalMs)
 
+    // Browsers throttle timers in background tabs; refetch as soon as the
+    // tab is visible again so the dashboard doesn't sit on stale numbers.
+    const onVisible = () => {
+      if (!document.hidden) tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     // The cleanup function: React runs this when the component unmounts or
     // when a dependency changes (before re-running the effect). Forgetting to
     // clear intervals here is the classic React memory-leak bug.
     return () => {
       cancelled = true
       clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
     }
     // Dependency array: the effect restarts only if intervalMs changes.
   }, [intervalMs])
