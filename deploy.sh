@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# gpu-top server deployment — run ON the server (zver0), from the repo root:
+# gpu-top deployment — run ON zver0, from the repo root:
 #
-#   git pull && ./deploy.sh server     deploy/upgrade the dashboard server
-#   ./deploy.sh token                  print the agent token (for clients' tokenFile)
-#   ./deploy.sh status                 show the server container state
+#   git pull && ./deploy.sh server       deploy/upgrade the dashboard server (here)
+#   ./deploy.sh agent zver10 [zver11..]  deploy the docker agent to GPU machine(s)
+#   ./deploy.sh token                    print the agent token (for NixOS tokenFile)
+#   ./deploy.sh status [zver10 ...]      server container state (+ named agents)
 #
-# Agents are NOT deployed by this script: they are built declaratively on each
-# GPU machine via the flake's NixOS module (nixosModules.agent); the only thing
-# they need from here is the token printed by `./deploy.sh token`.
+# The docker agent is the "for now" deployment; the tidier endgame per machine
+# is the flake's NixOS module (services.gpu-top-agent) with the same token file.
 #
 # One-time setup on this machine (as root):
 #   mkdir -p /etc/gpu-top && chown ipg /etc/gpu-top
@@ -15,6 +15,13 @@
 CONFIG_TEMPLATE="examples/server-ipg.toml"
 LDAP_CA_SOURCE=~/certs-2026/ipg-ldap-ca.crt
 PUBLIC_URL="http://zver0.zesoi.fer.hr:8000"
+
+# --- agent deployment ---
+SSH_PORT="443"                 # zver machines run sshd on 443
+SSH_USER="ipg"
+HOST_SUFFIX=".zesoi.fer.hr"
+AGENT_GPU_FLAG="--device=nvidia.com/gpu=all"   # NixOS CDI; use "--gpus all" elsewhere
+AGENT_DOCKER_SOCK="yes"        # mount docker.sock for container names (root-equiv on host)
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,6 +31,10 @@ LDAP_SECRET_PATH="/etc/gpu-top/ldap_service_password"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# ssh to a zver machine; ControlMaster multiplexing = one password prompt per host
+SSH_OPTS=(-p "$SSH_PORT" -o ControlMaster=auto -o ControlPath="$HOME/.ssh/cm-%r@%h-%p" -o ControlPersist=120)
+zssh() { local host=$1; shift; ssh "${SSH_OPTS[@]}" "$SSH_USER@$host$HOST_SUFFIX" "$@"; }
 
 # --- secrets: generated once on this machine, reused on every run -------------
 load_secrets() {
@@ -102,6 +113,53 @@ deploy_server() {
   log "next: install the agent token on each GPU machine (see ./deploy.sh token)"
 }
 
+# --- agent: everything for one GPU machine, from here --------------------------
+deploy_agent() { # $1 = short host name (zver10); also used as the dashboard name
+  local name=$1
+  load_secrets
+  log "=== $name: deploying agent to $SSH_USER@$name$HOST_SUFFIX ==="
+
+  log "[1/5] $name: /etc/gpu-top setup (may prompt for sudo password)"
+  ssh -t "${SSH_OPTS[@]}" "$SSH_USER@$name$HOST_SUFFIX" \
+    "sudo mkdir -p /etc/gpu-top && sudo chown \$USER /etc/gpu-top"
+
+  log "[2/5] $name: installing token + agent.toml"
+  printf '%s' "$AGENT_TOKEN" \
+    | zssh "$name" "umask 077 && cat > /etc/gpu-top/agent-token"
+  printf '[agent]\nserver_name = "%s"\nurl = "%s"\ninterval = 5.0\n' \
+      "$name" "$PUBLIC_URL" \
+    | zssh "$name" "umask 077 && cat > /etc/gpu-top/agent.toml"
+
+  log "[3/5] $name: shipping repo (committed tree @ HEAD)"
+  git archive --format=tar.gz HEAD \
+    | zssh "$name" "mkdir -p ~/gpu-top-src && find ~/gpu-top-src -mindepth 1 -delete && tar xzf - -C ~/gpu-top-src"
+
+  log "[4/5] $name: building agent image"
+  zssh "$name" "cd ~/gpu-top-src && docker build --target agent -t gpu-top-agent ."
+
+  local sock=""
+  [[ $AGENT_DOCKER_SOCK == yes ]] && sock="-v /var/run/docker.sock:/var/run/docker.sock"
+  log "[5/5] $name: starting gpu-top-agent"
+  zssh "$name" "
+    docker rm -f gpu-top-agent >/dev/null 2>&1 || true
+    docker run -d --name gpu-top-agent --restart unless-stopped \
+      $AGENT_GPU_FLAG --pid=host \
+      -v /etc/gpu-top/agent.toml:/etc/gpu-top/agent.toml:ro \
+      -v /etc/gpu-top/agent-token:/etc/gpu-top/agent-token:ro \
+      -e GPU_TOP_AGENT_TOKEN_FILE=/etc/gpu-top/agent-token \
+      $sock \
+      gpu-top-agent >/dev/null
+  "
+
+  sleep 3
+  log "$name: GPUs visible in the container:"
+  zssh "$name" "docker exec gpu-top-agent nvidia-smi -L" \
+    || log "WARNING: nvidia-smi failed inside the container on $name (CDI injection?)"
+  log "$name: agent log:"
+  zssh "$name" "docker logs --tail 3 gpu-top-agent"
+  log "=== $name: done — it should appear in the dashboard within ~5s ==="
+}
+
 # --- token: what the clients need ----------------------------------------------
 show_token() {
   load_secrets
@@ -114,12 +172,21 @@ show_token() {
 }
 
 status() {
-  docker ps --filter name=gpu-top-server --format '{{.Names}}  {{.Status}}'
+  log "server (local):"
+  docker ps --filter name=gpu-top-server --format '  {{.Names}}  {{.Status}}'
+  local name
+  for name in "$@"; do
+    log "agent ($name):"
+    zssh "$name" "docker ps --filter name=gpu-top-agent --format '  {{.Names}}  {{.Status}}'" || true
+  done
 }
 
 case "${1:-}" in
   server) deploy_server ;;
+  agent)  shift
+          [[ $# -ge 1 ]] || die "usage: ./deploy.sh agent zver10 [zver11 ...]"
+          for name in "$@"; do deploy_agent "$name"; done ;;
   token)  show_token ;;
-  status) status ;;
+  status) shift || true; status "$@" ;;
   *) sed -n '2,12p' "$0"; exit 1 ;;
 esac
