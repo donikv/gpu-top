@@ -68,11 +68,15 @@ class Database:
                     "INSERT INTO servers (name, last_seen, agent_version) VALUES (?,?,?)",
                     (server_name, received_at, agent_version)).lastrowid
 
+            # Agent clocks can't be trusted (skewed hosts push samples that land
+            # outside the dashboard's time window). Anchor the batch to server
+            # time: the newest sample becomes received_at, older buffered
+            # samples keep their relative spacing.
+            offset = received_at - max(s["ts"] for s in samples) if samples else 0.0
+
             accepted = 0
             for sample in samples:
-                # Guard against wildly future agent clocks so staleness/history math
-                # stays sane; past timestamps are fine (backlog flush).
-                ts = min(sample["ts"], received_at)
+                ts = sample["ts"] + offset
                 self.conn.executemany(
                     """INSERT INTO gpu_samples (server_id, ts, gpu_index, gpu_name, uuid,
                          temp_c, util_pct, mem_util_pct, mem_used_mib, mem_total_mib,
@@ -140,12 +144,16 @@ class Database:
         return out
 
     def history(self, server_name, gpu_index, minutes, points):
-        """Time-bucketed averages so the response never exceeds `points` rows."""
+        """Time-bucketed averages so the response never exceeds `points` rows.
+
+        Returns (rows, since, until) — the requested window bounds let the UI
+        position partial data honestly instead of stretching it."""
         row = self.conn.execute(
             "SELECT id FROM servers WHERE name=?", (server_name,)).fetchone()
         if not row:
             return None
-        since = time.time() - minutes * 60
+        until = time.time()
+        since = until - minutes * 60
         bucket = max(1.0, minutes * 60 / points)
         rows = self.conn.execute(
             """SELECT CAST(ts / :bucket AS INT) * :bucket AS t,
@@ -158,5 +166,6 @@ class Database:
                WHERE server_id = :sid AND gpu_index = :gpu AND ts >= :since
                GROUP BY t ORDER BY t""",
             dict(bucket=bucket, sid=row["id"], gpu=gpu_index, since=since)).fetchall()
-        return [dict(ts=r["t"], util_pct=r["util_pct"], mem_pct=r["mem_pct"],
-                     temp_c=r["temp_c"], power_w=r["power_w"]) for r in rows]
+        return ([dict(ts=r["t"], util_pct=r["util_pct"], mem_pct=r["mem_pct"],
+                      temp_c=r["temp_c"], power_w=r["power_w"]) for r in rows],
+                since, until)

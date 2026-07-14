@@ -251,6 +251,12 @@ body {
   display: block;
 }
 .gridline { stroke: var(--border); stroke-width: 0.3; }
+.sparkline-empty {
+  fill: var(--text-dim);
+  font-size: 5px;             /* viewBox units: the 100x30 space, not px */
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
 
 /* ----------------------------------------------------------- process table */
 

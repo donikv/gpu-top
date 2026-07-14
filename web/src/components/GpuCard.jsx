@@ -25,7 +25,7 @@ export default function GpuCard({ serverName, gpu }) {
 
   // Hooks compose: this custom hook re-fetches whenever the window changes,
   // because `minutes` is in its dependency array.
-  const points = useHistory(serverName, gpu.gpu_index, minutes)
+  const history = useHistory(serverName, gpu.gpu_index, minutes)
 
   const memPct =
     gpu.mem_total_mib > 0 ? (gpu.mem_used_mib / gpu.mem_total_mib) * 100 : null
@@ -68,19 +68,19 @@ export default function GpuCard({ serverName, gpu }) {
         ))}
       </div>
 
-      {points === null ? (
+      {history === null ? (
         <div className="chart-loading">loading…</div>
       ) : (
         <>
           {/* <>…</> is a Fragment: group siblings without an extra div. */}
           <Sparkline
-            points={points}
+            history={history}
             field="util_pct"
             label="utilization %"
             color="var(--accent-util)"
           />
           <Sparkline
-            points={points}
+            history={history}
             field="mem_pct"
             label="memory %"
             color="var(--accent-mem)"

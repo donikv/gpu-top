@@ -79,6 +79,7 @@ def test_full_flow(client):
     hist = client.get("/api/history",
                       params={"server": "hydra1", "gpu": 0, "minutes": 5}).json()
     assert len(hist["points"]) == 1
+    assert hist["since"] < hist["until"]   # requested window shipped to the UI
 
 
 def test_login_rejects_empty_password(client):

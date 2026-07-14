@@ -44,28 +44,40 @@ def test_staleness(db):
     assert srv["stale"]
 
 
-def test_future_timestamps_clamped(db):
+def test_skewed_agent_clock_anchored_to_server_time(db):
     now = time.time()
-    db.ingest("hydra1", "0.2.0", [sample(now + 9999)], received_at=now)
+    # agent clock 2h BEHIND: newest sample must be stored at received_at, and
+    # the 5s spacing of the backlog preserved (else charts show empty windows)
+    behind = now - 7200
+    db.ingest("hydra1", "0.2.0", [sample(behind - 5), sample(behind)], received_at=now)
     (srv,) = db.current(stale_after=30.0)
-    assert srv["gpus"][0]["ts"] <= now
+    assert srv["gpus"][0]["ts"] == pytest.approx(now)
+    rows, _, _ = db.history("hydra1", 0, minutes=1, points=60)
+    assert len(rows) == 2                # both samples inside the 1min window
+
+    # agent clock ahead: also anchored back to received_at
+    db.ingest("hydra2", "0.2.0", [sample(now + 9999)], received_at=now)
+    srv2 = [s for s in db.current(stale_after=30.0) if s["name"] == "hydra2"][0]
+    assert srv2["gpus"][0]["ts"] == pytest.approx(now)
 
 
 def test_retention(db):
     now = time.time()
-    db.ingest("hydra1", "0.2.0", [sample(now - 10 * 86400), sample(now)], now)
+    db.ingest("hydra1", "0.2.0", [sample(now - 10 * 86400)], now - 10 * 86400)
+    db.ingest("hydra1", "0.2.0", [sample(now)], now)
     assert db.prune(retention_days=7) == 1
-    points = db.history("hydra1", 0, minutes=60 * 24 * 31, points=300)
-    assert len(points) == 1
+    rows, _, _ = db.history("hydra1", 0, minutes=60 * 24 * 31, points=300)
+    assert len(rows) == 1
 
 
 def test_history_downsampled(db):
     now = time.time()
     samples = [sample(now - i, util=float(i % 100)) for i in range(600)]
     db.ingest("hydra1", "0.2.0", samples, now)
-    points = db.history("hydra1", 0, minutes=10, points=50)
-    assert 2 <= len(points) <= 51        # bucketed, not one row per sample
-    assert all(p["mem_pct"] == 50.0 for p in points)  # 1000/2000 MiB
+    rows, since, until = db.history("hydra1", 0, minutes=10, points=50)
+    assert 2 <= len(rows) <= 51          # bucketed, not one row per sample
+    assert all(p["mem_pct"] == 50.0 for p in rows)  # 1000/2000 MiB
+    assert since < until <= time.time()  # requested window bounds for the UI
 
 
 def test_history_unknown_server(db):

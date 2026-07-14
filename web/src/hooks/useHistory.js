@@ -9,7 +9,9 @@ import { api } from '../api'
 const REFRESH_MS = 10000
 
 export function useHistory(server, gpu, minutes) {
-  const [points, setPoints] = useState(null) // null = still loading
+  // history = { points, since, until } — since/until are the requested time
+  // window so charts can place partial data correctly. null = still loading.
+  const [history, setHistory] = useState(null)
 
   useEffect(() => {
     // When dependencies change (e.g. the user picks a different time window),
@@ -22,13 +24,13 @@ export function useHistory(server, gpu, minutes) {
       api
         .history(server, gpu, minutes)
         .then((data) => {
-          if (!cancelled) setPoints(data.points)
+          if (!cancelled) setHistory(data)
         })
         .catch(() => {
-          if (!cancelled) setPoints([])
+          if (!cancelled) setHistory({ points: [], since: 0, until: 0 })
         })
 
-    setPoints(null) // show the loading state while the new window loads
+    setHistory(null) // show the loading state while the new window loads
     load()
     const id = setInterval(load, REFRESH_MS)
 
@@ -41,5 +43,5 @@ export function useHistory(server, gpu, minutes) {
     // eslint's react-hooks plugin exists to catch exactly that.
   }, [server, gpu, minutes])
 
-  return points
+  return history
 }

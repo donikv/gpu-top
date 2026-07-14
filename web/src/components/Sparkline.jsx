@@ -15,17 +15,21 @@ import { useMemo } from 'react'
 const W = 100
 const H = 30
 
-export default function Sparkline({ points, field, label, color }) {
+export default function Sparkline({ history, field, label, color }) {
+  const { points, since, until } = history
   const { line, area, latest } = useMemo(() => {
     const values = points.map((p) => p[field])
-    if (values.length < 2) return { line: '', area: '', latest: null }
+    const latest = values.length ? values[values.length - 1] : null
+    if (values.length < 2) return { line: '', area: '', latest }
+
+    // X is anchored to the REQUESTED window (since..until), not to the data's
+    // own extent — a freshly deployed server honestly shows a short line at
+    // the right edge instead of a stretched-to-full-width one.
+    const t0 = since
+    const span = until - since || 1
 
     // Fixed 0-100 y-scale: these are percentages, and a stable scale keeps
     // charts comparable across GPUs (auto-scaling makes idle noise look wild).
-    const ts = points.map((p) => p.ts)
-    const t0 = ts[0]
-    const span = ts[ts.length - 1] - t0 || 1
-
     const xy = points.map((p) => {
       const x = ((p.ts - t0) / span) * W
       const y = H - (Math.min(100, Math.max(0, p[field] ?? 0)) / 100) * H
@@ -35,10 +39,10 @@ export default function Sparkline({ points, field, label, color }) {
     return {
       line: xy.join(' '),
       // Close the polygon down to the baseline for the soft fill under the line.
-      area: `${xy.join(' ')} ${W},${H} 0,${H}`,
-      latest: values[values.length - 1],
+      area: `${xy.join(' ')} ${xy[xy.length - 1].split(',')[0]},${H} ${xy[0].split(',')[0]},${H}`,
+      latest,
     }
-  }, [points, field]) // recompute only when the data or field changes
+  }, [points, field, since, until]) // recompute only when data or window changes
 
   return (
     <div className="sparkline">
@@ -54,7 +58,7 @@ export default function Sparkline({ points, field, label, color }) {
         {/* reference lines at 50% and 100% */}
         <line x1="0" y1={H / 2} x2={W} y2={H / 2} className="gridline" />
         <line x1="0" y1="0.5" x2={W} y2="0.5" className="gridline" />
-        {line && (
+        {line ? (
           <>
             <polygon points={area} fill={color} opacity="0.15" />
             {/* vector-effect keeps the stroke 1.5px on screen no matter how
@@ -67,6 +71,12 @@ export default function Sparkline({ points, field, label, color }) {
               vectorEffect="non-scaling-stroke"
             />
           </>
+        ) : (
+          /* fewer than 2 points yet (agent just started): say so instead of
+             showing a chart-shaped void */
+          <text x={W / 2} y={H / 2} className="sparkline-empty">
+            collecting data…
+          </text>
         )}
       </svg>
     </div>

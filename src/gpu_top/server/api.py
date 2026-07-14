@@ -28,4 +28,7 @@ def history(
     result = request.app.state.db.history(server, gpu, minutes, points)
     if result is None:
         raise HTTPException(status_code=404, detail=f"unknown server {server!r}")
-    return {"points": result}
+    rows, since, until = result
+    # since/until = the requested window, so the UI can position partial data
+    # at the correct spot instead of stretching it to full width.
+    return {"points": rows, "since": since, "until": until}
