@@ -27,7 +27,11 @@ export function useHistory(server, gpu, minutes) {
           if (!cancelled) setHistory(data)
         })
         .catch(() => {
-          if (!cancelled) setHistory({ points: [], since: 0, until: 0 })
+          // Functional update: on a FAILED refresh keep the last good data
+          // (blanking a working chart for one hiccup is worse than showing
+          // slightly stale history); only show the empty state if we never
+          // had data for this window.
+          if (!cancelled) setHistory((prev) => prev ?? { points: [], since: 0, until: 0 })
         })
 
     setHistory(null) // show the loading state while the new window loads

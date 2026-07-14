@@ -5,6 +5,10 @@
 // among siblings, not globally.
 export default function ProcessTable({ processes }) {
   return (
+    // The wrapper div is what scrolls horizontally on narrow screens — the
+    // table keeps its natural width inside it, so the page itself never
+    // scrolls sideways (see .proc-table-wrap in styles.css).
+    <div className="proc-table-wrap">
     <table className="proc-table">
       <thead>
         <tr>
@@ -30,5 +34,6 @@ export default function ProcessTable({ processes }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 }
