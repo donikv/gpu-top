@@ -82,3 +82,12 @@ def test_history_downsampled(db):
 
 def test_history_unknown_server(db):
     assert db.history("nope", 0, 60, 300) is None
+
+
+def test_servers_natural_order(db):
+    now = time.time()
+    for name in ("zver10", "hydra2", "zver2", "hydra", "zver1"):
+        db.ingest(name, "0.2.0", [sample(now)], now)
+    names = [s["name"] for s in db.list_servers()]
+    assert names == ["hydra", "hydra2", "zver1", "zver2", "zver10"]
+    assert [s["name"] for s in db.current(30.0)] == names

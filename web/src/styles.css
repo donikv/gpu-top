@@ -100,14 +100,27 @@ body {
 
 .topbar h1 { margin: 0; font-size: 18px; }
 
-.topbar select {
-  padding: 6px 10px;
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 13px;
+/* server filter chips: any subset can be toggled on */
+.server-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
+.chip {
+  padding: 5px 12px;
+  font-size: 13px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--accent-util);
+  border-color: var(--accent-util);
+  color: #fff;
+}
+.chip.stale:not(.active) { color: var(--status-critical); }
 
 .topbar-right {
   margin-left: auto;

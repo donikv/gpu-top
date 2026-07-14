@@ -5,9 +5,22 @@ At one small batch per agent every few seconds this is far below SQLite's
 limits; WAL mode lets reads proceed concurrently with writes.
 """
 import os
+import re
 import sqlite3
 import threading
 import time
+
+
+def natural_key(name):
+    """Sort key: alphabetical first, embedded numbers by value.
+
+    'hydra' < 'zver', and 'zver2' < 'zver10' (plain string sort would put
+    zver10 first). Digit runs become ('', int) tuples so they compare
+    numerically and sort before letter runs at the same position."""
+    return tuple(
+        ("", int(part)) if part.isdigit() else (part.lower(), -1)
+        for part in re.split(r"(\d+)", name) if part
+    )
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS servers (
@@ -115,15 +128,17 @@ class Database:
             """SELECT s.name, s.last_seen, s.agent_version,
                       (SELECT COUNT(DISTINCT gpu_index) FROM gpu_samples
                         WHERE server_id = s.id) AS gpu_count
-               FROM servers s ORDER BY s.name""").fetchall()
-        return [dict(r) for r in rows]
+               FROM servers s""").fetchall()
+        return sorted((dict(r) for r in rows), key=lambda r: natural_key(r["name"]))
 
     def current(self, stale_after):
         """Latest sample per server plus staleness, for the dashboard grid."""
         now = time.time()
         out = []
-        for srv in self.conn.execute(
-                "SELECT id, name, last_seen FROM servers ORDER BY name").fetchall():
+        servers = sorted(
+            self.conn.execute("SELECT id, name, last_seen FROM servers").fetchall(),
+            key=lambda r: natural_key(r["name"]))
+        for srv in servers:
             gpus = self.conn.execute(
                 """SELECT * FROM gpu_samples
                    WHERE server_id=? AND ts=(SELECT MAX(ts) FROM gpu_samples
