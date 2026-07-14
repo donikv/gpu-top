@@ -33,16 +33,14 @@ tokens = ["FILL-ME"]
 mode = "ldap"
 
 [auth.ldap]
-# Same server the PAM clients use. useTLS in the NixOS config means STARTTLS
-# on the plain ldap:// port, and TLS_REQCERT allow means the certificate is
-# not validated — starttls/tls_verify below reproduce exactly that.
+# Same server the PAM clients use: STARTTLS on the plain ldap:// port, with
+# the certificate validated against our own CA (2026-07 PKI: server cert has
+# SAN zver0.zesoi.fer.hr, signed by ipg-ldap-ca, expires 2031). deploy.sh
+# installs the CA at this path and mounts it into the container.
 uri = "ldap://zver0.zesoi.fer.hr"
 starttls = true
-tls_verify = false
-# RECOMMENDED once you have the CA cert: set tls_verify = true and point
-# ca_cert_file at it (see DEPLOY.md section 6) so the admin bind password
-# cannot be captured by a MITM on the server-to-LDAP path.
-#ca_cert_file = "/etc/gpu-top/ldap-ca.crt"
+tls_verify = true
+ca_cert_file = "/etc/gpu-top/ldap-ca.crt"
 
 # Same service account the PAM clients bind with (binddn).
 # The password is deliberately NOT in this file: supply it on the server via
