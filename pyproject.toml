@@ -9,6 +9,9 @@ description = "htop-style GPU monitor with docker container attribution, plus a 
 requires-python = ">=3.11"
 # The base package (TUI + agent) is deliberately dependency-free.
 
+[project.urls]
+Repository = "https://github.com/donikv/gpu-top"
+
 [project.optional-dependencies]
 server = [
     "fastapi",

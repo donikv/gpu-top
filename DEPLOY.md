@@ -170,7 +170,7 @@ machines:
 
 ```nix
 {
-  inputs.gpu-top.url = "git+https://your.git.host/gpu-top";  # or a local path
+  inputs.gpu-top.url = "github:donikv/gpu-top/client-server";  # branch ref; drop /client-server once merged to main
 
   # in the machine's configuration:
   imports = [ inputs.gpu-top.nixosModules.agent ];
