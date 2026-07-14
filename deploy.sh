@@ -82,6 +82,17 @@ deploy_server() {
     -v gpu-top-data:/var/lib/gpu-top \
     gpu-top-server >/dev/null
 
+  # join the LDAP container's docker network so uri = ldap://ldap-server
+  # resolves container-to-container (host firewall on :389 doesn't apply)
+  ldap_net=$(docker inspect ldap-server \
+    -f '{{range $k,$_ := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || true)
+  if [[ -n ${ldap_net:-} ]]; then
+    log "connecting gpu-top-server to docker network '$ldap_net' (ldap-server)"
+    docker network connect "$ldap_net" gpu-top-server 2>/dev/null || true
+  else
+    log "WARNING: no running 'ldap-server' container found - ldap://ldap-server will not resolve"
+  fi
+
   log "smoke test: /api/me should answer 401 (auth up, not logged in)"
   sleep 2
   code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/me)

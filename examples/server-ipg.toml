@@ -33,11 +33,12 @@ tokens = ["FILL-ME"]
 mode = "ldap"
 
 [auth.ldap]
-# Same server the PAM clients use: STARTTLS on the plain ldap:// port, with
-# the certificate validated against our own CA (2026-07 PKI: server cert has
-# SAN zver0.zesoi.fer.hr, signed by ipg-ldap-ca, expires 2031). deploy.sh
-# installs the CA at this path and mounts it into the container.
-uri = "ldap://zver0.zesoi.fer.hr"
+# The LDAP server runs in docker on the same host; deploy.sh joins this
+# container to its network, so we talk directly to the container name
+# (host-firewall rules on 389 don't apply, and the cert's SANs include
+# DNS:ldap-server so tls_verify keeps working). STARTTLS + our own CA
+# (2026-07 PKI, expires 2031).
+uri = "ldap://ldap-server"
 starttls = true
 tls_verify = true
 ca_cert_file = "/etc/gpu-top/ldap-ca.crt"
