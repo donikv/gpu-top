@@ -192,15 +192,18 @@ deploy_caddy() {
 
   # 1. web cert for the dashboard hostname, signed by the SAME CA as LDAP so
   #    clients that already trust ipg-ldap-ca trust this too. Issued once.
+  #    Extensions + <=825-day validity are HARD requirements on iOS/macOS:
+  #    Apple refuses the TLS connection outright (no warning page) for leaf
+  #    certs without EKU serverAuth or valid longer than 825 days.
   if [[ ! -f $CADDY_DIR/certs/web.crt ]]; then
-    log "issuing web cert for $CADDY_DOMAIN from the ipg CA"
+    log "issuing web cert for $CADDY_DOMAIN from the ipg CA (valid 825 days)"
     ( umask 077
       openssl req -newkey rsa:4096 -sha256 -nodes \
         -keyout "$CADDY_DIR/certs/web.key" -out /tmp/web.csr \
         -subj "/O=FER IPG ZVERI/CN=$CADDY_DOMAIN"
       openssl x509 -req -in /tmp/web.csr -CA "$LDAP_CA_SOURCE" -CAkey "$LDAP_CA_KEY" \
-        -CAcreateserial -days 1825 -sha256 \
-        -extfile <(printf "subjectAltName=DNS:%s" "$CADDY_DOMAIN") \
+        -CAcreateserial -days 825 -sha256 \
+        -extfile <(printf 'subjectAltName=DNS:%s\nextendedKeyUsage=serverAuth\nkeyUsage=critical,digitalSignature,keyEncipherment\nbasicConstraints=CA:FALSE\n' "$CADDY_DOMAIN") \
         -out "$CADDY_DIR/certs/web.crt"
       rm -f /tmp/web.csr )
   else
