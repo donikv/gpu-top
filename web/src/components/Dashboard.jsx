@@ -61,8 +61,7 @@ export default function Dashboard({ user, onLogout }) {
     <div className="dashboard">
       <header className="topbar">
         {/* files in web/public/ are served from the site root as-is */}
-        <img src="/android-chrome-192x192.png" alt="" className="logo" />
-        <h1>gpu-top</h1>
+        <img src="/android-chrome-192x192.png" alt="gpu-top" className="logo" />
 
         {/* Server filter: chips while they fit on one row, a Grafana-style
             multi-select dropdown once they'd wrap (ServerFilter measures). */}

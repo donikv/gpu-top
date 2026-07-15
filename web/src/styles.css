@@ -100,10 +100,13 @@ body {
 
 .topbar h1 { margin: 0; font-size: 18px; }
 
-/* the pixel-art mascot, scaled to the title's height */
-.logo { height: 30px; width: 30px; }
-.login-title { display: flex; align-items: center; gap: 10px; }
-.login-title .logo { height: 34px; width: 34px; }
+/* the pixel-art mascot. In the topbar it stands alone (no title text), so
+   give it a bit more presence; image-rendering keeps the pixel art crisp
+   instead of blurring when scaled. */
+.logo { height: 40px; width: 40px; image-rendering: pixelated; }
+/* login screen: large enough to actually read the pixel detail */
+.login-title { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.login-title .logo { height: 120px; width: 120px; }
 
 /* server filter: chips on one row, or a dropdown when they'd overflow.
    The wrapper takes the leftover topbar space; ServerFilter.jsx measures an
