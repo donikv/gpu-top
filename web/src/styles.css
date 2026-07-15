@@ -123,6 +123,12 @@ body {
 }
 .chips-measure {
   position: absolute;    /* measured, never seen */
+  left: 0;
+  top: 0;
+  width: 100%;           /* clamp to the available space so it can't widen the
+                            page; scrollWidth still reports the full chip width,
+                            which is exactly what we compare against */
+  overflow: hidden;
   visibility: hidden;
   pointer-events: none;
 }

@@ -33,6 +33,7 @@ CADDY_DOMAIN="zver0.zesoi.fer.hr"
 CADDY_PORT="8443"              # NOT 443 (sshd) and NOT 6443 (phpldapadmin)
 CADDY_DIR=~/caddy              # Caddyfile + web cert live here
 LDAP_CA_KEY=~/certs-2026/ipg-ldap-ca.key   # signs the web cert (same CA as LDAP)
+GPU_NET="gpu-top-net"          # shared user-defined net: caddy -> gpu-top-server by name
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -46,6 +47,10 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 # ssh to a zver machine; ControlMaster multiplexing = one password prompt per host
 SSH_OPTS=(-p "$SSH_PORT" -o ControlMaster=auto -o ControlPath="$HOME/.ssh/cm-%r@%h-%p" -o ControlPersist=120)
 zssh() { local host=$1; shift; ssh "${SSH_OPTS[@]}" "$SSH_USER@$host$HOST_SUFFIX" "$@"; }
+
+# a user-defined network (unlike the default bridge) gives containers DNS by
+# name; idempotent.
+ensure_net() { docker network inspect "$GPU_NET" >/dev/null 2>&1 || docker network create "$GPU_NET" >/dev/null; }
 
 # --- secrets: generated once on this machine, reused on every run -------------
 load_secrets() {
@@ -114,6 +119,12 @@ deploy_server() {
   else
     log "WARNING: no running 'ldap-server' container found - ldap://ldap-server will not resolve"
   fi
+
+  # also join the shared proxy network so caddy can reach us by name. Docker
+  # DNS re-points to this fresh container automatically, so redeploying the
+  # server does NOT require re-running `./deploy.sh caddy`.
+  ensure_net
+  docker network connect "$GPU_NET" gpu-top-server 2>/dev/null || true
 
   log "smoke test: /api/me should answer 401 (auth up, not logged in)"
   sleep 2
@@ -200,17 +211,19 @@ deploy_caddy() {
   sed -e "s/__DOMAIN__/$CADDY_DOMAIN/" -e "s/__PORT__/$CADDY_PORT/" \
       examples/Caddyfile > "$CADDY_DIR/Caddyfile"
 
-  # 3. the proxy must reach gpu-top-server by name -> same docker network
-  local net
-  net=$(docker inspect gpu-top-server \
-    -f '{{range $k,$_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null | awk '{print $1}')
-  [[ -n $net ]] || die "gpu-top-server isn't running — ./deploy.sh server first"
+  # 3. shared user-defined network so the proxy reaches the server by name.
+  #    Docker DNS re-resolves after a server redeploy, so this only needs the
+  #    server to exist, not to be the same container as last time.
+  docker inspect gpu-top-server >/dev/null 2>&1 \
+    || die "gpu-top-server isn't running — ./deploy.sh server first"
+  ensure_net
+  docker network connect "$GPU_NET" gpu-top-server 2>/dev/null || true
 
   # 4. (re)start caddy
-  log "starting caddy on :$CADDY_PORT (network '$net' -> gpu-top-server:8000)"
+  log "starting caddy on :$CADDY_PORT (network '$GPU_NET' -> gpu-top-server:8000)"
   docker rm -f caddy >/dev/null 2>&1 || true
   docker run -d --name caddy --restart unless-stopped \
-    --network "$net" -p "$CADDY_PORT:$CADDY_PORT" \
+    --network "$GPU_NET" -p "$CADDY_PORT:$CADDY_PORT" \
     -v "$CADDY_DIR/Caddyfile":/etc/caddy/Caddyfile:ro \
     -v "$CADDY_DIR/certs":/etc/caddy/certs:ro \
     -v caddy-data:/data \
