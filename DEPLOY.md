@@ -114,6 +114,25 @@ slapd bound exclusively to 127.0.0.1 requires `network_mode: host`.
 ready-made compose file for that setup, with the bind password supplied as a
 docker secret.
 
+**Future option — compose-managed stack.** An earlier iteration of this repo
+packaged `gpu-top-server` + Caddy (see §5) into one `docker-compose.yml`, so
+`docker network connect` between them was unnecessary — compose gives
+services DNS-by-name automatically — and `deploy.sh server` drove the whole
+stack with `docker compose up -d --build` instead of two separate `docker run`
+invocations. It was reverted (not needed yet), but the commit is still
+reachable if this is worth revisiting:
+```sh
+git cherry-pick a677fae
+```
+This replays that commit on top of the current branch: it adds a root
+`docker-compose.yml` (server + caddy as one stack, with the LDAP network
+attached via a generated `.env`), rewrites `deploy.sh`'s `server`/`caddy`
+subcommands to call `docker compose` (detecting v1 vs v2), migrates any
+pre-existing plain-`docker run` containers so compose can adopt their names,
+and updates the docs/examples accordingly. If cherry-picking conflicts (the
+branch has moved since), the commit itself is a complete, self-contained diff
+you can read with `git show a677fae` and reapply by hand.
+
 ### Agent (on each GPU server)
 
 Requires the [NVIDIA container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
