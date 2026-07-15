@@ -33,9 +33,8 @@ export default function LoginPage({ onLogin }) {
       <form className="login-card" onSubmit={handleSubmit}>
         <div className="login-title">
           <img src="/android-chrome-192x192.png" alt="" className="logo" />
-          <h1>gpu-top</h1>
         </div>
-        <p className="login-hint">Sign in with your LDAP account</p>
+        <p className="login-hint">Sign in with your "zver" account</p>
 
         {/* value + onChange = controlled input */}
         <input
