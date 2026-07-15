@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { api } from '../api'
 import { usePolling } from '../hooks/usePolling'
 import ClusterView from './ClusterView'
+import ServerFilter from './ServerFilter'
 import ServerSection from './ServerSection'
 import WindowPicker from './WindowPicker'
 
@@ -63,26 +64,14 @@ export default function Dashboard({ user, onLogout }) {
         <img src="/android-chrome-192x192.png" alt="" className="logo" />
         <h1>gpu-top</h1>
 
-        {/* Filter chips: click any combination of servers; "All" clears. */}
-        <div className="server-chips">
-          <button
-            className={`chip${selected.size === 0 ? ' active' : ''}`}
-            onClick={() => setSelected(new Set())}
-          >
-            All ({servers.length})
-          </button>
-          {servers.map((s) => (
-            // key must be stable and unique among siblings; the server name
-            // is both. Array indexes make poor keys when lists reorder.
-            <button
-              key={s.name}
-              className={`chip${selected.has(s.name) ? ' active' : ''}${s.stale ? ' stale' : ''}`}
-              onClick={() => toggle(s.name)}
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
+        {/* Server filter: chips while they fit on one row, a Grafana-style
+            multi-select dropdown once they'd wrap (ServerFilter measures). */}
+        <ServerFilter
+          servers={servers}
+          selected={selected}
+          toggle={toggle}
+          clear={() => setSelected(new Set())}
+        />
 
         <div className="topbar-right">
           <span className="user">{user}</span>

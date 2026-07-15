@@ -105,12 +105,57 @@ body {
 .login-title { display: flex; align-items: center; gap: 10px; }
 .login-title .logo { height: 34px; width: 34px; }
 
-/* server filter chips: any subset can be toggled on */
+/* server filter: chips on one row, or a dropdown when they'd overflow.
+   The wrapper takes the leftover topbar space; ServerFilter.jsx measures an
+   invisible copy of the chips against it to decide which form to render. */
+.server-filter {
+  position: relative;
+  flex: 1;
+  min-width: 0;          /* let a flex child actually shrink below content size */
+}
 .server-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;     /* one row by design; we collapse instead of wrapping */
   gap: 6px;
 }
+.chips-measure {
+  position: absolute;    /* measured, never seen */
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* the collapsed, Grafana-style multi-select */
+.server-dropdown { position: relative; display: inline-block; }
+.server-dropdown .caret { margin-left: 6px; font-size: 10px; }
+.server-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+.server-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.server-option:hover { background: var(--surface-2); }
+.server-option.stale { color: var(--status-critical); }
+.server-option input { accent-color: var(--accent-util); }
 .chip {
   padding: 5px 12px;
   font-size: 13px;
