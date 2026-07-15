@@ -202,10 +202,34 @@ The server can run the same way (`gpu-top-server -c ...` +
 
 ## 5. Serving the app over HTTPS (reverse proxy)
 
-Out of the box the server speaks plain HTTP, so **logins and agent tokens cross
-the network in cleartext**. Put a TLS-terminating reverse proxy in front before
-real use. The proxy handles certificates; the gpu-top server keeps speaking
-HTTP but only to the proxy.
+Out of the box the server speaks plain HTTP, so **browser logins cross the
+network in cleartext**. Put a TLS-terminating reverse proxy in front of the
+*user-facing* side before real use. Agents are a separate matter: they push a
+bearer token (not a login password) over the trusted local network and are
+left on plain `:8000` — the proxy does not touch that path.
+
+### The one-command way (ipg/zver0)
+
+On zver0, `./deploy.sh caddy` does all of the below: signs a web cert for
+`zver0.zesoi.fer.hr` with the **same ipg CA** used for LDAP, renders
+[examples/Caddyfile](examples/Caddyfile), joins Caddy to the server's docker
+network, and starts it on **:8443** (443 is sshd, 6443 is phpLDAPadmin). Then
+set `cookie_secure = "always"` in `server.toml` (already the default in
+[examples/server-ipg.toml](examples/server-ipg.toml)), re-run `./deploy.sh
+server`, and open port 8443 in the host firewall. Users browse
+`https://zver0.zesoi.fer.hr:8443`; anyone who already trusts `ipg-ldap-ca`
+(the LDAP rollout) gets a clean lock.
+
+Two environment specifics worth knowing: **443 can't be used** (sshd owns it),
+and **Let's Encrypt likely can't** — public ACME needs inbound 80/443 from the
+internet, which the FER firewall + ssh-on-443 setup blocks; signing with your
+own CA sidesteps that entirely. `tls internal` (Caddy's own auto CA) is the
+zero-config alternative if you'd rather not reuse the ipg CA.
+
+### The manual way (other environments)
+
+The proxy handles certificates; the gpu-top server keeps speaking HTTP but only
+to the proxy.
 
 Three changes turn the plaintext setup into a proper HTTPS one:
 

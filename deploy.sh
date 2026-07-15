@@ -2,12 +2,17 @@
 # gpu-top deployment — run ON zver0, from the repo root:
 #
 #   git pull && ./deploy.sh server       deploy/upgrade the dashboard server (here)
+#   ./deploy.sh caddy                    put an HTTPS reverse proxy in front (users only)
 #   ./deploy.sh agent zver10 [zver11..]  deploy the docker agent to GPU machine(s)
 #   ./deploy.sh token                    print the agent token (for NixOS tokenFile)
 #   ./deploy.sh status [zver10 ...]      server container state (+ named agents)
 #
 # The docker agent is the "for now" deployment; the tidier endgame per machine
 # is the flake's NixOS module (services.gpu-top-agent) with the same token file.
+#
+# `caddy` is only the USER-facing TLS entrypoint. Agents keep pushing straight
+# to the server on :8000 over the local network — this proxy does not touch
+# that path.
 #
 # One-time setup on this machine (as root):
 #   mkdir -p /etc/gpu-top && chown ipg /etc/gpu-top
@@ -22,6 +27,12 @@ SSH_USER="ipg"
 HOST_SUFFIX=".zesoi.fer.hr"
 AGENT_GPU_FLAG="--device=nvidia.com/gpu=all"   # NixOS CDI; use "--gpus all" elsewhere
 AGENT_DOCKER_SOCK="yes"        # mount docker.sock for container names (root-equiv on host)
+
+# --- caddy HTTPS proxy (browser users) ---
+CADDY_DOMAIN="zver0.zesoi.fer.hr"
+CADDY_PORT="8443"              # NOT 443 (sshd) and NOT 6443 (phpldapadmin)
+CADDY_DIR=~/caddy              # Caddyfile + web cert live here
+LDAP_CA_KEY=~/certs-2026/ipg-ldap-ca.key   # signs the web cert (same CA as LDAP)
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -160,6 +171,67 @@ deploy_agent() { # $1 = short host name (zver10); also used as the dashboard nam
   log "=== $name: done — it should appear in the dashboard within ~5s ==="
 }
 
+# --- caddy: user-facing HTTPS proxy --------------------------------------------
+deploy_caddy() {
+  command -v docker >/dev/null || die "docker not found"
+  [[ -f $LDAP_CA_SOURCE && -f $LDAP_CA_KEY ]] \
+    || die "need the ipg CA at $LDAP_CA_SOURCE and $LDAP_CA_KEY to sign the web cert"
+
+  mkdir -p "$CADDY_DIR/certs"
+
+  # 1. web cert for the dashboard hostname, signed by the SAME CA as LDAP so
+  #    clients that already trust ipg-ldap-ca trust this too. Issued once.
+  if [[ ! -f $CADDY_DIR/certs/web.crt ]]; then
+    log "issuing web cert for $CADDY_DOMAIN from the ipg CA"
+    ( umask 077
+      openssl req -newkey rsa:4096 -sha256 -nodes \
+        -keyout "$CADDY_DIR/certs/web.key" -out /tmp/web.csr \
+        -subj "/O=FER IPG ZVERI/CN=$CADDY_DOMAIN"
+      openssl x509 -req -in /tmp/web.csr -CA "$LDAP_CA_SOURCE" -CAkey "$LDAP_CA_KEY" \
+        -CAcreateserial -days 1825 -sha256 \
+        -extfile <(printf "subjectAltName=DNS:%s" "$CADDY_DOMAIN") \
+        -out "$CADDY_DIR/certs/web.crt"
+      rm -f /tmp/web.csr )
+  else
+    log "web cert already present at $CADDY_DIR/certs — keeping it"
+  fi
+
+  # 2. render the Caddyfile (domain + port are the only variables)
+  sed -e "s/__DOMAIN__/$CADDY_DOMAIN/" -e "s/__PORT__/$CADDY_PORT/" \
+      examples/Caddyfile > "$CADDY_DIR/Caddyfile"
+
+  # 3. the proxy must reach gpu-top-server by name -> same docker network
+  local net
+  net=$(docker inspect gpu-top-server \
+    -f '{{range $k,$_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null | awk '{print $1}')
+  [[ -n $net ]] || die "gpu-top-server isn't running — ./deploy.sh server first"
+
+  # 4. (re)start caddy
+  log "starting caddy on :$CADDY_PORT (network '$net' -> gpu-top-server:8000)"
+  docker rm -f caddy >/dev/null 2>&1 || true
+  docker run -d --name caddy --restart unless-stopped \
+    --network "$net" -p "$CADDY_PORT:$CADDY_PORT" \
+    -v "$CADDY_DIR/Caddyfile":/etc/caddy/Caddyfile:ro \
+    -v "$CADDY_DIR/certs":/etc/caddy/certs:ro \
+    -v caddy-data:/data \
+    caddy:2 >/dev/null
+
+  # 5. smoke test through the proxy (SNI = the real name, connect to localhost)
+  sleep 2
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' \
+    --resolve "$CADDY_DOMAIN:$CADDY_PORT:127.0.0.1" --cacert "$LDAP_CA_SOURCE" \
+    "https://$CADDY_DOMAIN:$CADDY_PORT/api/me" 2>/dev/null || echo ERR)
+  if [[ $code == 401 ]]; then
+    log "caddy OK (TLS + cert chain verified) — browse https://$CADDY_DOMAIN:$CADDY_PORT"
+  else
+    log "WARNING: got '$code' via caddy — check: docker logs caddy"
+  fi
+  log "reminder: set cookie_secure = \"always\" in $CONFIG_TEMPLATE and re-run"
+  log "  ./deploy.sh server, and open port $CADDY_PORT in the host firewall."
+  log "agents are unaffected: they keep pushing to :8000 on the local network."
+}
+
 # --- token: what the clients need ----------------------------------------------
 show_token() {
   load_secrets
@@ -183,10 +255,11 @@ status() {
 
 case "${1:-}" in
   server) deploy_server ;;
+  caddy)  deploy_caddy ;;
   agent)  shift
           [[ $# -ge 1 ]] || die "usage: ./deploy.sh agent zver10 [zver11 ...]"
           for name in "$@"; do deploy_agent "$name"; done ;;
   token)  show_token ;;
   status) shift || true; status "$@" ;;
-  *) sed -n '2,12p' "$0"; exit 1 ;;
+  *) sed -n '2,17p' "$0"; exit 1 ;;
 esac

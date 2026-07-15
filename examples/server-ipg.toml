@@ -7,15 +7,16 @@
 # two "FILL-ME" values.
 
 [server]
-# Direct HTTP on all interfaces to start with. Once a TLS reverse proxy is in
-# front (recommended — see DEPLOY.md §5), change to:
-#   host = "127.0.0.1"      # only the proxy can reach it
-#   behind_proxy = true     # trust the proxy's X-Forwarded-Proto
+# Listens on all interfaces: agents on the other zver machines push here over
+# the local network on :8000 (that path is intentionally plain HTTP and is not
+# fronted by the proxy). Browser users go through the Caddy HTTPS proxy
+# (./deploy.sh caddy, DEPLOY.md §5); do NOT set host=127.0.0.1 or agents break.
 host = "0.0.0.0"
 port = 8000
 behind_proxy = false
 trusted_proxies = "127.0.0.1"
-cookie_secure = "auto"      # becomes Secure automatically once behind_proxy=true
+# Browsers always arrive via the TLS proxy, so pin the session cookie Secure.
+cookie_secure = "always"
 db_path = "/var/lib/gpu-top/metrics.db"
 retention_days = 7
 
