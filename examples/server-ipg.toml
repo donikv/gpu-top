@@ -1,0 +1,57 @@
+# gpu-top server configuration for the ipg/zesoi environment.
+# Matches the NixOS users.ldap client setup (zver* machines):
+#   server ldap://zver0.zesoi.fer.hr, STARTTLS, TLS_REQCERT allow,
+#   binddn cn=administrator,dc=ipg,dc=com, base dc=ipg,dc=com.
+#
+# Copy to /etc/gpu-top/server.toml on the monitoring host and fill in the
+# two "FILL-ME" values.
+
+[server]
+# Listens on all interfaces: agents on the other zver machines push here over
+# the local network on :8000 (that path is intentionally plain HTTP and is not
+# fronted by the proxy). Browser users go through the Caddy HTTPS proxy
+# (./deploy.sh caddy, DEPLOY.md §5); do NOT set host=127.0.0.1 or agents break.
+host = "0.0.0.0"
+port = 8000
+behind_proxy = false
+trusted_proxies = "127.0.0.1"
+# Browsers always arrive via the TLS proxy, so pin the session cookie Secure.
+cookie_secure = "always"
+db_path = "/var/lib/gpu-top/metrics.db"
+retention_days = 7
+
+# Generate: python3 -c 'import secrets; print(secrets.token_hex(32))'
+session_secret = "FILL-ME"
+session_hours = 12
+stale_after = 30.0
+
+[agents]
+# Generate: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+# and put the same value in each zver machine's agent.toml.
+tokens = ["FILL-ME"]
+
+[auth]
+mode = "ldap"
+
+[auth.ldap]
+# The LDAP server runs in docker on the same host; deploy.sh joins this
+# container to its network, so we talk directly to the container name
+# (host-firewall rules on 389 don't apply, and the cert's SANs include
+# DNS:ldap-server so tls_verify keeps working). STARTTLS + our own CA
+# (2026-07 PKI, expires 2031).
+uri = "ldap://ldap-server"
+starttls = true
+tls_verify = true
+ca_cert_file = "/etc/gpu-top/ldap-ca.crt"
+
+# Same service account the PAM clients bind with (binddn).
+# The password is deliberately NOT in this file: supply it on the server via
+# the GPU_TOP_SERVICE_PASSWORD env var, or GPU_TOP_SERVICE_PASSWORD_FILE
+# pointing at a root-owned secret file (see docker-compose.zver0.yml).
+service_dn = "cn=administrator,dc=ipg,dc=com"
+
+base_dn = "dc=ipg,dc=com"
+
+# Counterpart of the clients' pam_filter: only members of the "monitoring"
+# machine group may log in to the dashboard.
+user_filter = "(&(uid={username})(memberOf=cn=monitoring,ou=Machines,dc=ipg,dc=com))"

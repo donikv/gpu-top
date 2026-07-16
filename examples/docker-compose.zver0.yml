@@ -1,0 +1,39 @@
+# gpu-top server on zver0, next to the LDAP server it authenticates against.
+#
+# One-time setup on zver0:
+#   mkdir -p /etc/gpu-top
+#   cp examples/server-ipg.toml /etc/gpu-top/server.toml   # fill in the FILL-MEs
+#   # write the LDAP bind password (never lands in git or the image):
+#   install -m 600 /dev/null /etc/gpu-top/ldap_service_password
+#   printf '%s' 'THE-PASSWORD' > /etc/gpu-top/ldap_service_password
+# Then, from the repo root:
+#   docker build --target server -t gpu-top-server .
+#   docker compose -f examples/docker-compose.zver0.yml up -d
+#
+# LDAP reachability: the config's uri (ldap://zver0.zesoi.fer.hr) resolves to
+# this host's public address, which containers on the default bridge network
+# can reach — the same path the other zver machines use, no extra wiring.
+# This holds whether slapd runs on the host or in another container that
+# publishes port 389. Only if slapd listens on 127.0.0.1 exclusively do you
+# need `network_mode: host` on this service (drop the `ports:` mapping then).
+services:
+  server:
+    image: gpu-top-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - /etc/gpu-top/server.toml:/etc/gpu-top/server.toml:ro
+      - gpu-top-data:/var/lib/gpu-top
+    environment:
+      # Read the bind password from the mounted secret (see `secrets:` below).
+      GPU_TOP_SERVICE_PASSWORD_FILE: /run/secrets/ldap_service_password
+    secrets:
+      - ldap_service_password
+    restart: unless-stopped
+
+secrets:
+  ldap_service_password:
+    file: /etc/gpu-top/ldap_service_password
+
+volumes:
+  gpu-top-data:

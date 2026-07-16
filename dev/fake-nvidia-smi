@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Fake nvidia-smi for development on machines without a GPU.
+
+Emits plausible CSV for 2 GPUs whose utilization wobbles over time, plus two
+fake compute processes. Includes a '[N/A]' fan and a '[Not Found]' process
+name so the parsers' edge cases get exercised. Put this directory on PATH:
+
+    PATH="$PWD/dev:$PATH" gpu-top
+"""
+import math
+import sys
+import time
+
+UUIDS = ["GPU-fake0000-0000-0000-0000-000000000000",
+         "GPU-fake1111-1111-1111-1111-111111111111"]
+
+
+def wobble(period, lo, hi, phase=0.0):
+    t = time.time()
+    return lo + (hi - lo) * (0.5 + 0.5 * math.sin(2 * math.pi * t / period + phase))
+
+
+def main():
+    args = " ".join(sys.argv[1:])
+    if "--query-gpu=index,uuid" in args:
+        for i, u in enumerate(UUIDS):
+            print(f"{i}, {u}")
+    elif "--query-gpu=" in args:
+        for i in range(2):
+            util = wobble(120, 5, 95, phase=i * 2)
+            mem_used = wobble(300, 2000, 38000, phase=i)
+            temp = 35 + util * 0.4
+            power = 60 + util * 3
+            fan = f"{30 + util * 0.5:.0f}" if i == 0 else "[N/A]"
+            print(f"{i}, NVIDIA GeForce FAKE 4090, {temp:.0f}, {util:.0f}, "
+                  f"{util * 0.7:.0f}, {mem_used:.0f}, 40960, {power:.2f}, 450.00, {fan}")
+    elif "--query-compute-apps=" in args:
+        print(f"12345, /usr/bin/python3, {wobble(300, 1800, 36000):.0f}, {UUIDS[0]}")
+        print(f"23456, [Not Found], {wobble(200, 500, 4000):.0f}, {UUIDS[1]}")
+    else:
+        print("fake nvidia-smi: unsupported invocation", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

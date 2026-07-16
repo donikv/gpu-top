@@ -1,0 +1,21 @@
+# gpu-top HTTPS reverse proxy — the USER-facing TLS entrypoint only.
+#
+# Agents keep pushing straight to the server on :8000 over the local network;
+# this proxy does not touch that path. Rendered and deployed by
+# `./deploy.sh caddy` (which fills in the domain/port and the cert paths),
+# or adapt by hand — the only variables are __DOMAIN__ and __PORT__.
+#
+# Port note: 443 is taken by sshd on the zver boxes, so this listens on a
+# non-standard HTTPS port. The cert is signed by the ipg CA (same one used
+# for LDAP), so no public ACME / inbound-80 dependency.
+
+{
+	# We're not on 443, so skip the automatic HTTP->HTTPS redirect vhost
+	# (it would try to bind :80). Explicit `tls` below also disables ACME.
+	auto_https disable_redirects
+}
+
+__DOMAIN__:__PORT__ {
+	tls /etc/caddy/certs/web.crt /etc/caddy/certs/web.key
+	reverse_proxy gpu-top-server:8000
+}

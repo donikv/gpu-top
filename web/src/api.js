@@ -1,0 +1,67 @@
+// === api.js: plain-JS fetch helpers =========================================
+// Not everything needs to be a React component! Data access is ordinary
+// JavaScript; components import these functions and call them from hooks.
+//
+// Every request includes the session cookie automatically because the app and
+// the API share an origin (in dev, the Vite proxy makes it look that way).
+
+// Small wrapper: throw on non-2xx so callers can use try/catch, and decode
+// JSON in one place.
+async function request(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+  if (res.status === 401) {
+    // Signal "not logged in" distinctly so the app can show the login page.
+    const err = new Error('unauthorized')
+    err.unauthorized = true
+    throw err
+  }
+  if (!res.ok) {
+    throw new Error(`${url} failed: HTTP ${res.status}`)
+  }
+  // 204 No Content (logout) has no body to parse.
+  return res.status === 204 ? null : res.json()
+}
+
+export const api = {
+  // Who am I? Used on app load to restore an existing session.
+  me: () => request('/api/me'),
+
+  login: (username, password) =>
+    request('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+
+  logout: () => request('/api/logout', { method: 'POST' }),
+
+  // Latest sample for every server (the dashboard poll).
+  current: () => request('/api/current'),
+
+  // Every server's per-GPU series in one response (cluster overview).
+  cluster: (win, points = 200) => {
+    const params = new URLSearchParams({ points })
+    if (win.start != null) {
+      params.set('start', win.start)
+      params.set('end', win.end)
+    } else {
+      params.set('minutes', win.minutes)
+    }
+    return request(`/api/cluster?${params}`)
+  },
+
+  // Downsampled time series for one GPU. `win` is either { minutes: N }
+  // (rolling window) or { start, end } (fixed past range, epoch seconds).
+  history: (server, gpu, win, points = 300) => {
+    const params = new URLSearchParams({ server, gpu, points })
+    if (win.start != null) {
+      params.set('start', win.start)
+      params.set('end', win.end)
+    } else {
+      params.set('minutes', win.minutes)
+    }
+    return request(`/api/history?${params}`)
+  },
+}

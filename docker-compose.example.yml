@@ -1,0 +1,40 @@
+# Example deployment. In practice the server runs on one central host and the
+# agents run on the GPU servers — this file shows both for reference; copy the
+# relevant service to each machine.
+services:
+  server:
+    build:
+      context: .
+      target: server
+    # or: image: gpu-top-server (after you build/push it)
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./server.toml:/etc/gpu-top/server.toml:ro
+      - gpu-top-data:/var/lib/gpu-top
+    environment:
+      # Keep secrets out of the TOML if you prefer:
+      # GPU_TOP_SESSION_SECRET: ...
+      # GPU_TOP_SERVICE_PASSWORD: ...
+      {}
+    restart: unless-stopped
+
+  # Runs on each GPU machine, NOT next to the server (shown here for syntax).
+  agent:
+    build:
+      context: .
+      target: agent
+    volumes:
+      - ./agent.toml:/etc/gpu-top/agent.toml:ro
+      # OPTIONAL, for container-name attribution. SECURITY: access to the
+      # docker socket is root-equivalent on the host. Omit this line and the
+      # dashboard simply shows "?" for container names.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # /proc of the host is needed to attribute GPU processes to users.
+    pid: host
+    # Requires the NVIDIA container toolkit on the host.
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  gpu-top-data:
