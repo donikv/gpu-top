@@ -20,6 +20,36 @@ merged to `main` first (so the flake input tracks `main`, no branch pin).
 - Assumed target system is `x86_64-linux` (the flake also builds
   `aarch64-linux`, but that's not relevant to this fleet).
 
+## 0. Current state: zver10 and zver13 already run the Docker agent
+
+Before this NixOS module existed, `zver10` and `zver13` were deployed with
+`gpu-top`'s `./deploy.sh agent zverN` — the "for now" Docker path (see
+DEPLOY.md §3 / the runbook used at the time). That command, run from zver0,
+left the following on each of those two hosts:
+
+- `/etc/gpu-top/agent-token` — the bearer token, written **as the `ipg` user**
+  (no `sudo`), mode 600. Root-owned it is not, but that's fine: the systemd
+  service the NixOS module creates runs as root by default, and root can read
+  a 600 file regardless of who owns it. **This file is reusable as-is** —
+  nothing to redistribute for these two hosts (see §4).
+- `/etc/gpu-top/agent.toml` — a plain file (not nix-managed). The NixOS
+  module manages the *same path* via `environment.etc`, so `nixos-rebuild
+  switch` simply replaces it with its own symlinked version on first
+  activation. Nothing to clean up by hand.
+- `~/gpu-top-src` — a git checkout used only to `docker build` the agent
+  image; irrelevant to the NixOS path, safe to delete once migrated.
+- A running `docker run --name gpu-top-agent --restart unless-stopped ...`
+  container, built from the `gpu-top-agent` image.
+
+The other 11 hosts (`zver1`–`zver9`, `zver11`, `zver12`) have no agent
+deployed yet — for them, follow §1–§6 below as a normal first-time install
+(nothing to migrate, no existing container to stop).
+
+For `zver10` and `zver13`, do §1–§3 as written (they're idempotent — the
+Docker deployment never touched `flake.nix` or `hosts/`), **skip §4** for
+those two specifically (token already present), then follow **§4b** before
+`nixos-rebuild switch` to retire the Docker container cleanly.
+
 ## 1. Add the flake input
 
 `flake.nix` (repo root), in the `inputs` block:
@@ -115,16 +145,20 @@ derived implicitly.)
 
 ## 4. Distribute the agent token (once per host)
 
-The token is a shared bearer secret between every agent and the server's
-`[agents].tokens` — it must **not** go into this git repo (unlike, notably,
-the LDAP bind password currently sitting in `hosts/zver/ldap/default.nix` —
-worth fixing separately, but don't repeat that pattern here). Get it from
-`gpu-top`'s `deploy.sh` on zver0 and pipe it straight to each host's
-root-owned file:
+**Skip this for `zver10` and `zver13`** — they already have
+`/etc/gpu-top/agent-token` from the earlier Docker deployment (see §0); the
+module's `tokenFile` just points at the same path and reads it as-is.
+
+For the other 11 hosts: the token is a shared bearer secret between every
+agent and the server's `[agents].tokens` — it must **not** go into this git
+repo (unlike, notably, the LDAP bind password currently sitting in
+`hosts/zver/ldap/default.nix` — worth fixing separately, but don't repeat
+that pattern here). Get it from `gpu-top`'s `deploy.sh` on zver0 and pipe it
+straight to each host's root-owned file:
 
 ```sh
 # on zver0, in the gpu-top checkout:
-for h in zver1 zver2 zver3 zver4 zver5 zver6 zver7 zver8 zver9 zver10 zver11 zver12 zver13; do
+for h in zver1 zver2 zver3 zver4 zver5 zver6 zver7 zver8 zver9 zver11 zver12; do
   ./deploy.sh token 2>/dev/null | ssh -p 443 ipg@$h.zesoi.fer.hr \
     'sudo mkdir -p /etc/gpu-top && sudo tee /etc/gpu-top/agent-token >/dev/null && sudo chmod 600 /etc/gpu-top/agent-token'
 done
@@ -133,6 +167,39 @@ done
 This only needs to be done once per host (or again if the token ever
 rotates); it's independent of nixos-rebuild and survives rebuilds since it
 lives outside the nix store.
+
+## 4b. Migrating zver10 / zver13 off the Docker agent
+
+Do this **before** `nixos-rebuild switch` on these two hosts — otherwise, for
+a window, you'd have both the Docker container and the new systemd unit
+pushing samples under the same `server_name`. The server doesn't crash or
+corrupt anything in that scenario (each ingest just does a last-write-wins
+update per server row, per `db.py`'s `ingest()`), but it's wasted work and
+makes the history briefly noisier than it needs to be, so cut over cleanly
+rather than let it self-resolve.
+
+```sh
+# on zver10 (repeat on zver13):
+ssh -p 443 ipg@zver10.zesoi.fer.hr '
+  docker rm -f gpu-top-agent            # stop + remove; restart policy means
+                                         # a plain "docker stop" is not enough
+  docker rmi gpu-top-agent 2>/dev/null || true   # optional: reclaim image space
+  rm -rf ~/gpu-top-src                  # optional: the build checkout, unused by nix
+'
+```
+
+Then proceed with the normal §5 rebuild for that host
+(`nixos-rebuild switch --flake .#zver10`). The gap between stopping the
+container and the new systemd unit coming up is a few seconds to however
+long the rebuild takes — well under `stale_after` in a typical config, so
+expect at most a brief "stale" flash in the dashboard for that host, not a
+lost-data event (the agent has no local history of its own to lose; it only
+ever held an in-memory push buffer).
+
+This is a **per-host, independent operation** — migrate zver10 and zver13 on
+their own schedule, in either order, without touching the other one or any
+of the 11 hosts getting a first-time install via §4. There's no fleet-wide
+cutover moment required.
 
 ## 5. Build and switch
 
@@ -171,6 +238,15 @@ no repeated 401s, then check the dashboard — the `zver1` section should
 appear within one push interval (~5s). Repeat spot-checks for a couple more
 hosts; if one host 401s while others succeed, its `/etc/gpu-top/agent-token`
 wasn't written (step 4) or doesn't match the server's current token.
+
+For `zver10`/`zver13` specifically, also confirm the old container is
+actually gone rather than quietly still running alongside the new unit
+(easy to forget if §4b was skipped or ran before the rebuild finished):
+
+```sh
+ssh -p 443 ipg@zver10.zesoi.fer.hr docker ps -a --filter name=gpu-top-agent
+# want: no output (or "Exited" from `docker rm -f`, never a second live agent)
+```
 
 ## Rollback
 
