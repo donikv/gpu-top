@@ -22,6 +22,42 @@ def natural_key(name):
         for part in re.split(r"(\d+)", name) if part
     )
 
+
+DEFAULT_INTERVAL = 5.0   # agent default; used when a window has <2 samples
+GAP_FACTOR = 2.5         # spacing > 2.5x the typical interval counts as a gap
+
+
+def find_gaps(timestamps, since, until, interval, factor=GAP_FACTOR):
+    """Stretches of [since, until] with no samples longer than interval*factor.
+
+    `timestamps` must be sorted. The window edges count as boundaries, so an
+    agent that died mid-window (or only came up late in it) shows up as an
+    'end' (or 'start') gap rather than silently looking like a short window.
+    kind is 'start' | 'between' | 'end', or 'all' when nothing arrived."""
+    threshold = interval * factor
+    if until <= since:
+        return []
+    if not timestamps:
+        return [dict(start=since, end=until, seconds=until - since, kind="all")]
+    edges = [since, *timestamps, until]
+    gaps = []
+    for i in range(len(edges) - 1):
+        a, b = edges[i], edges[i + 1]
+        if b - a > threshold:
+            kind = ("start" if i == 0 else
+                    "end" if i == len(edges) - 2 else "between")
+            gaps.append(dict(start=a, end=b, seconds=b - a, kind=kind))
+    return gaps
+
+
+def typical_interval(timestamps):
+    """Median spacing between samples: robust to the very gaps we look for."""
+    diffs = sorted(b - a for a, b in zip(timestamps, timestamps[1:]))
+    if not diffs:
+        return DEFAULT_INTERVAL
+    mid = len(diffs) // 2
+    return diffs[mid] if len(diffs) % 2 else (diffs[mid - 1] + diffs[mid]) / 2
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS servers (
   id INTEGER PRIMARY KEY,
@@ -191,6 +227,46 @@ class Database:
         return ([dict(ts=r["t"], util_pct=r["util_pct"], mem_pct=r["mem_pct"],
                       temp_c=r["temp_c"], power_w=r["power_w"]) for r in rows],
                 since, until)
+
+    def diagnostics(self, server_name, start, end, now=None):
+        """Every raw sample of one server in [start, end], plus collection gaps.
+
+        Unlike history() nothing is averaged: one entry per sample with its
+        exact timestamp, for reconstructing what happened around an incident.
+        Gaps are measured up to min(end, now) — the future isn't "missing".
+        Returns None for an unknown server."""
+        row = self.conn.execute(
+            "SELECT id FROM servers WHERE name=?", (server_name,)).fetchone()
+        if not row:
+            return None
+        rows = self.conn.execute(
+            """SELECT ts, gpu_index, gpu_name, temp_c, power_w, power_limit_w,
+                      util_pct, mem_used_mib, mem_total_mib, fan_pct
+               FROM gpu_samples
+               WHERE server_id = ? AND ts >= ? AND ts <= ?
+               ORDER BY ts, gpu_index""",
+            (row["id"], start, end)).fetchall()
+
+        # All GPUs of one agent sample share the exact same ts (the ingest
+        # offset is applied per batch), so equal ts == one sample.
+        samples, gpu_names = [], {}
+        for r in rows:
+            if not samples or samples[-1]["ts"] != r["ts"]:
+                samples.append(dict(ts=r["ts"], gpus=[]))
+            gpu = {k: r[k] for k in r.keys() if k not in ("ts", "gpu_name")}
+            samples[-1]["gpus"].append(gpu)
+            gpu_names[r["gpu_index"]] = r["gpu_name"]
+
+        timestamps = [s["ts"] for s in samples]
+        interval = typical_interval(timestamps)
+        now = now if now is not None else time.time()
+        gaps = find_gaps(timestamps, start, min(end, now), interval)
+        return dict(
+            server=server_name, since=start, until=end,
+            interval_s=interval, gap_threshold_s=interval * GAP_FACTOR,
+            gpus=[dict(index=i, name=gpu_names[i]) for i in sorted(gpu_names)],
+            samples=samples, gaps=gaps,
+        )
 
     def cluster_history(self, minutes, points, start=None, end=None):
         """Bucketed util/mem series for EVERY server and GPU, one query.

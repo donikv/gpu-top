@@ -19,7 +19,10 @@ async function request(url, options = {}) {
     throw err
   }
   if (!res.ok) {
-    throw new Error(`${url} failed: HTTP ${res.status}`)
+    // FastAPI puts a readable reason in {"detail": "..."}; surface it.
+    const detail = await res.json().then((b) => b.detail, () => null)
+    const why = typeof detail === 'string' ? ` (${detail})` : ''
+    throw new Error(`${url.split('?')[0]} failed: HTTP ${res.status}${why}`)
   }
   // 204 No Content (logout) has no body to parse.
   return res.status === 204 ? null : res.json()
@@ -51,6 +54,14 @@ export const api = {
     }
     return request(`/api/cluster?${params}`)
   },
+
+  // Every known server (name, last_seen, gpu_count) — the diagnostics picker.
+  servers: () => request('/api/servers'),
+
+  // Raw, un-averaged samples + collection gaps for one server in a fixed
+  // past range (epoch seconds). Diagnostics mode only.
+  diagnostics: (server, start, end) =>
+    request(`/api/diagnostics?${new URLSearchParams({ server, start, end })}`),
 
   // Downsampled time series for one GPU. `win` is either { minutes: N }
   // (rolling window) or { start, end } (fixed past range, epoch seconds).

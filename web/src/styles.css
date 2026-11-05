@@ -434,3 +434,44 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------ diagnostics */
+
+.back-link { color: var(--text-dim); text-decoration: none; }
+.back-link:hover { color: var(--text); }
+
+.diag-form select,
+.diag-downloads button {
+  padding: 5px 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.diag-downloads { display: flex; gap: 6px; }
+
+.diag-summary { color: var(--text); font-variant-numeric: tabular-nums; }
+.diag-h2 { font-size: 15px; margin: 20px 0 4px; }
+.diag-none { color: var(--text-dim); margin: 6px 0; }
+.diag-gaps { min-width: 0; }
+
+/* The sample table can be thousands of rows: scroll inside a box and keep
+   the header (GPU names, units, peaks) pinned while scrolling. */
+.diag-scroll { max-height: 70vh; overflow: auto; border: 1px solid var(--surface-2); }
+.diag-table { min-width: 0; width: auto; }
+.diag-table thead { position: sticky; top: 0; background: var(--bg); z-index: 1; }
+.diag-table th, .diag-table td { padding: 3px 10px; white-space: nowrap; }
+.diag-table .gpu-head { text-align: center; border-left: 1px solid var(--border); }
+.diag-table .gpu-start { border-left: 1px solid var(--border); }
+.diag-table .peak-row th { color: var(--text); font-weight: 600; }
+.diag-table .warn { color: var(--status-warning); font-weight: 600; }
+.diag-table .missing { color: var(--status-critical); }
+.diag-table tr.partial td:first-child { color: var(--status-critical); }
+.diag-table .gap-row td {
+  background: color-mix(in srgb, var(--status-critical) 14%, transparent);
+  color: var(--status-critical);
+  font-weight: 500;
+}

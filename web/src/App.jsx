@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import Dashboard from './components/Dashboard'
+import DiagnosticsPage from './components/DiagnosticsPage'
 import LoginPage from './components/LoginPage'
 
 export default function App() {
@@ -16,6 +17,9 @@ export default function App() {
   //   null      -> checked, not logged in (show LoginPage)
   //   "alice"   -> logged in (show Dashboard)
   const [user, setUser] = useState(undefined)
+  // Hooks must run on every render in the same order, so this sits up here
+  // with the others — not after the early returns below.
+  const route = useHashRoute()
 
   // On first render, ask the server whether our session cookie is still valid.
   // The empty dependency array [] means "run this effect once after the first
@@ -45,5 +49,22 @@ export default function App() {
     setUser(null)
   }
 
+  // Minimal hash routing, no router library: '#/diag?...' shows the
+  // diagnostics page, anything else the dashboard. Hash URLs never reach the
+  // server, so links like '#/diag?server=zver3&from=…' are shareable as-is.
+  if (route.startsWith('#/diag')) {
+    return <DiagnosticsPage route={route} user={user} onLogout={handleLogout} />
+  }
   return <Dashboard user={user} onLogout={handleLogout} />
+}
+
+// Custom hook: the current location.hash as state, updated on navigation.
+function useHashRoute() {
+  const [hash, setHash] = useState(window.location.hash)
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return hash
 }

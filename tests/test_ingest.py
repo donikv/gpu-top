@@ -125,3 +125,26 @@ def test_logout(client):
     assert client.get("/api/me").status_code == 200
     client.post("/api/logout")
     assert client.get("/api/me").status_code == 401
+
+
+def test_diagnostics_endpoint(client):
+    assert client.post("/api/ingest", json=payload(), headers=auth()).status_code == 200
+    now = time.time()
+    assert client.get("/api/diagnostics", params={
+        "server": "hydra1", "start": now - 60, "end": now + 1}).status_code == 401
+    login(client)
+    r = client.get("/api/diagnostics", params={
+        "server": "hydra1", "start": now - 60, "end": now + 1})
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["samples"]) == 1
+    assert body["gpus"] == [{"index": 0, "name": "FAKE"}]
+    assert body["retained_since"] < now
+    assert body["gaps"][0]["kind"] == "start"       # nothing before the 1 sample
+
+    params = {"server": "hydra1", "start": now, "end": now - 1}
+    assert client.get("/api/diagnostics", params=params).status_code == 422
+    params = {"server": "hydra1", "start": now - 7 * 3600, "end": now}
+    assert client.get("/api/diagnostics", params=params).status_code == 422
+    params = {"server": "nope", "start": now - 60, "end": now}
+    assert client.get("/api/diagnostics", params=params).status_code == 404
